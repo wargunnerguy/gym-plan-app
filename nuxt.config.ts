@@ -10,12 +10,6 @@ export default defineNuxtConfig({
     enabled: true
   },
 
-  css: ['~/assets/css/main.css'],
-
-  routeRules: {
-    '/': { prerender: true }
-  },
-
   app: {
     head: {
       link: [
@@ -26,6 +20,12 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#0f172a' }
       ]
     }
+  },
+
+  css: ['~/assets/css/main.css'],
+
+  routeRules: {
+    '/': { prerender: true }
   },
 
   compatibilityDate: '2025-01-15',

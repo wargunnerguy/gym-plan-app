@@ -2,10 +2,16 @@
 import fs from 'fs'
 import path from 'path'
 import { google } from 'googleapis'
+import dotenv from 'dotenv'
 import { fileURLToPath } from 'url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+
+// Load .env then .env.local if present
+dotenv.config()
+dotenv.config({ path: path.join(__dirname, '..', '.env.local') })
+dotenv.config({ path: path.join(__dirname, '..', 'env.local') })
 
 const SHEET_ID = process.env.SHEET_ID
 const PROJECT_ID = process.env.GOOGLE_PROJECT_ID
@@ -36,14 +42,14 @@ async function fetchTab(tabName) {
   })
   const rows = res.data.values || []
   if (!rows.length) return []
-  const headers = rows[0].map((h) => h.trim())
+  const headers = rows[0].map(h => h.trim())
   return rows.slice(1).map((row) => {
     const obj = {}
     headers.forEach((header, idx) => {
       obj[header] = (row[idx] ?? '').toString().trim()
     })
     return obj
-  }).filter((row) => Object.values(row).some((v) => v !== ''))
+  }).filter(row => Object.values(row).some(v => v !== ''))
 }
 
 const toNumber = (value, fallback = 0) => {
@@ -60,7 +66,7 @@ const toBool = (value) => {
 const cleanText = (value = '') => value.toString().trim()
 
 function transformPlan(data) {
-  const byPlan = data.plans.map((plan) => ({
+  const byPlan = data.plans.map(plan => ({
     id: plan.plan_id,
     name: plan.plan_name,
     active: toBool(plan.active),
@@ -108,14 +114,14 @@ function transformPlan(data) {
           .sort((a, b) => a[0] - b[0])
           .map(([weekNumber, weekWorkouts]) => ({
             week: weekNumber,
-            workouts: weekWorkouts.map((wk) => ({
+            workouts: weekWorkouts.map(wk => ({
               id: wk.workout_id,
               dayName: wk.day_name,
               order: toNumber(wk.workout_order),
               focus: wk.focus,
               exercises: (exercisesByWorkout[wk.workout_id] || [])
                 .sort((a, b) => toNumber(a.order) - toNumber(b.order))
-                .map((ex) => ({
+                .map(ex => ({
                   id: ex.exercise_id,
                   order: toNumber(ex.order),
                   group: cleanText(ex.group),

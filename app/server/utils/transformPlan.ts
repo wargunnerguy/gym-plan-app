@@ -1,6 +1,6 @@
-type PlanRow = { plan_id: string; plan_name: string; active: boolean | string }
-type PhaseRow = { phase_id: string; plan_id: string; phase_name: string; phase_order: number | string; weeks_count: number | string }
-type WorkoutRow = { workout_id: string; phase_id: string; week_number: number | string; day_name: string; workout_order: number | string; focus: string }
+type PlanRow = { plan_id: string, plan_name: string, active: boolean | string }
+type PhaseRow = { phase_id: string, plan_id: string, phase_name: string, phase_order: number | string, weeks_count: number | string }
+type WorkoutRow = { workout_id: string, phase_id: string, week_number: number | string, day_name: string, workout_order: number | string, focus: string }
 type ExerciseRow = {
   exercise_id: string
   workout_id: string
@@ -76,7 +76,7 @@ const toBool = (value: boolean | string) => {
 const cleanText = (value?: string) => (value ?? '').toString().trim()
 
 export function transformPlan(data: SheetData): NormalizedPlan {
-  const byPlan = data.plans.map((plan) => ({
+  const byPlan = data.plans.map(plan => ({
     id: plan.plan_id,
     name: plan.plan_name,
     active: toBool(plan.active),
@@ -124,14 +124,14 @@ export function transformPlan(data: SheetData): NormalizedPlan {
           .sort((a, b) => a[0] - b[0])
           .map(([weekNumber, weekWorkouts]) => ({
             week: weekNumber,
-            workouts: weekWorkouts.map((wk) => ({
+            workouts: weekWorkouts.map(wk => ({
               id: wk.workout_id,
               dayName: wk.day_name,
               order: toNumber(wk.workout_order),
               focus: wk.focus,
               exercises: (exercisesByWorkout[wk.workout_id] || [])
                 .sort((a, b) => toNumber(a.order) - toNumber(b.order))
-                .map((ex) => ({
+                .map(ex => ({
                   id: ex.exercise_id,
                   order: toNumber(ex.order),
                   group: cleanText(ex.group),

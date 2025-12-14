@@ -25,6 +25,20 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   if (request.method !== 'GET') return
 
+  // Network-first for plan.json to avoid stale data
+  if (new URL(request.url).pathname === '/plan.json') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const clone = response.clone()
+          caches.open(CACHE).then((cache) => cache.put(request, clone)).catch(() => {})
+          return response
+        })
+        .catch(() => caches.match(request))
+    )
+    return
+  }
+
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached

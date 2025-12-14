@@ -8,27 +8,21 @@ export const usePlanStore = defineStore('plan', () => {
   const error = ref<string | null>(null)
   const lastUpdated = ref<string | null>(null)
 
-  const activePlan = computed(() => data.value.find((plan) => plan.active) || data.value[0])
+  const activePlan = computed(() => data.value.find(plan => plan.active) || data.value[0])
 
   const load = async () => {
     loading.value = true
     error.value = null
     try {
-      const { data: response, error: fetchError } = await useFetch<PlanResponse>('/plan.json', {
-        key: 'plan-fetch',
-        dedupe: 'defer'
-      })
-      if (fetchError.value) throw fetchError.value
-      if (response.value) {
-        data.value = response.value.plans
-        lastUpdated.value = response.value.updatedAt
-        if (process.client) {
-          localStorage.setItem('plan-cache', JSON.stringify(response.value))
-        }
+      const response = await $fetch<PlanResponse>('/plan.json', { cache: 'no-cache' })
+      data.value = response.plans
+      lastUpdated.value = response.updatedAt
+      if (import.meta.client) {
+        localStorage.setItem('plan-cache', JSON.stringify(response))
       }
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to load plan'
-      if (process.client) {
+      if (import.meta.client) {
         const cached = localStorage.getItem('plan-cache')
         if (cached) {
           const parsed = JSON.parse(cached) as PlanResponse
@@ -43,7 +37,7 @@ export const usePlanStore = defineStore('plan', () => {
   }
 
   onMounted(() => {
-    const cached = process.client ? localStorage.getItem('plan-cache') : null
+    const cached = import.meta.client ? localStorage.getItem('plan-cache') : null
     if (cached) {
       const parsed = JSON.parse(cached) as PlanResponse
       data.value = parsed.plans

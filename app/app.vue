@@ -31,8 +31,14 @@ onMounted(() => {
   <UApp>
     <UHeader>
       <template #left>
-        <NuxtLink to="/" class="flex items-center gap-2 font-semibold">
-          <UIcon name="i-lucide-dumbbell" class="h-5 w-5" />
+        <NuxtLink
+          to="/"
+          class="flex items-center gap-2 font-semibold"
+        >
+          <UIcon
+            name="i-lucide-dumbbell"
+            class="h-5 w-5"
+          />
           <span>Gym Plan</span>
         </NuxtLink>
       </template>
