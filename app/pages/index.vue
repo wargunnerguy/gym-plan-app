@@ -131,13 +131,35 @@ const blockedForToday = computed(() => progressStore.lastWorkoutDate === todayKe
 
 const currentWorkout = computed(() => nextWorkout.value)
 
+const cycleOrder = ['Legs', 'Push', 'Pull', 'Rest', 'Full', 'Rest']
+
 const upcomingWorkout = computed(() => {
   const phaseId = currentPhase.value?.id
   if (!phaseId || !weekData.value || !currentWorkout.value) return null
+
+  const focus = currentWorkout.value.focus
+  const idx = cycleOrder.findIndex(f => f.toLowerCase() === focus.toLowerCase())
+  const nextFocus = idx === -1 ? null : cycleOrder[(idx + 1) % cycleOrder.length]
+
   const remaining = weekData.value.workouts.filter(w => !progressStore.isCompleted(phaseId, weekData.value!.week, w.id))
   const nextIndex = remaining.findIndex(w => w.id === currentWorkout.value?.id)
-  if (nextIndex === -1) return null
-  return remaining[nextIndex + 1] || null
+  const afterCurrent = nextIndex === -1 ? null : remaining[nextIndex + 1]
+
+  if (nextFocus === 'Rest') {
+    return {
+      id: 'rest-day',
+      dayName: 'Rest',
+      focus: 'Rest',
+      exercises: []
+    }
+  }
+
+  if (nextFocus) {
+    const matchByFocus = remaining.find(w => w.focus.toLowerCase() === nextFocus.toLowerCase() && w.id !== currentWorkout.value?.id)
+    if (matchByFocus) return matchByFocus
+  }
+
+  return afterCurrent || remaining.find(w => w.id !== currentWorkout.value?.id) || null
 })
 
 const visibleWorkouts = computed(() => {
@@ -164,6 +186,14 @@ const reopenToday = () => {
 const unlockNextToday = () => {
   // Allow starting another workout the same calendar day without clearing completion
   progressStore.lastWorkoutDate = null
+}
+
+const rpeColor = (rpe: string) => {
+  const num = Number(String(rpe).replace(/[^0-9.]/g, ''))
+  if (Number.isNaN(num)) return 'neutral'
+  if (num >= 9.5) return 'error'
+  if (num >= 8) return 'warning'
+  return 'neutral'
 }
 
 const advanceIfCompleted = () => {
@@ -504,18 +534,19 @@ const workoutDuration = (workout: WorkoutItem) => {
                   >
                     {{ exercise.workingSets }} sets
                   </UBadge>
-                  <UBadge
-                    v-if="exercise.warmupSets"
-                    color="neutral"
-                    variant="soft"
-                  >
-                    {{ exercise.warmupSets }} warm-up
-                  </UBadge>
+                <UBadge
+                  v-if="exercise.warmupSets"
+                  color="neutral"
+                  variant="outline"
+                  class="opacity-70"
+                >
+                  {{ exercise.warmupSets }} warm-up
+                </UBadge>
                 </template>
               </div>
               <div class="flex items-center gap-2">
                 <UBadge
-                  color="neutral"
+                  :color="rpeColor(exercise.rpe)"
                   variant="outline"
                 >
                   RPE {{ exercise.rpe }}
