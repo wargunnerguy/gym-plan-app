@@ -14,17 +14,26 @@ const phases = computed(() => currentPlan.value?.phases || [])
 
 const selectedPhaseId = ref<string | null>(null)
 
+const phaseHasRemaining = (phaseId: string) => {
+  const phase = phases.value.find(p => p.id === phaseId)
+  if (!phase) return false
+  return phase.weeks.some(week =>
+    week.workouts.some(w => !progressStore.isCompleted(phaseId, week.week, w.id))
+  )
+}
+
+const pickInitialPhase = () => {
+  if (!phases.value.length) {
+    selectedPhaseId.value = null
+    return
+  }
+  const firstWithWork = phases.value.find(p => phaseHasRemaining(p.id))
+  selectedPhaseId.value = firstWithWork?.id ?? phases.value[0].id
+}
+
 watch(
   () => phaseOptions.value,
-  (phases) => {
-    if (!phases.length) {
-      selectedPhaseId.value = null
-      return
-    }
-    if (!selectedPhaseId.value || !phases.find(p => p.value === selectedPhaseId.value)) {
-      selectedPhaseId.value = phases[0].value
-    }
-  },
+  () => pickInitialPhase(),
   { immediate: true }
 )
 
@@ -55,6 +64,13 @@ const weeks = computed(() => currentPhase.value?.weeks || [])
 const selectedWeek = ref<number | null>(null)
 const hideCompleted = ref(true)
 
+const weekHasRemaining = (phaseId: string, weekNumber: number) => {
+  const phase = phases.value.find(p => p.id === phaseId)
+  const week = phase?.weeks.find(w => w.week === weekNumber)
+  if (!week) return false
+  return week.workouts.some(w => !progressStore.isCompleted(phaseId, weekNumber, w.id))
+}
+
 const pickInitialWeek = () => {
   const weeks = weekOptions.value
   if (!weeks.length) {
@@ -82,14 +98,10 @@ const weekData = computed(() =>
   currentPhase.value?.weeks.find(week => week.week === selectedWeek.value) || null
 )
 
-const workouts = computed(() => weekData.value?.workouts || [])
-
 const visibleWorkouts = computed(() => {
-  if (!workouts.value) return []
-  if (!hideCompleted.value) return workouts.value
-  const phaseId = currentPhase.value?.id
-  if (!phaseId) return workouts.value
-  return workouts.value.filter(w => !progressStore.isCompleted(phaseId, weekData.value?.week || 0, w.id))
+  if (blockedForToday.value) return []
+  if (!nextWorkout.value) return []
+  return [nextWorkout.value]
 })
 
 const nextWorkout = computed(() => {
@@ -98,6 +110,57 @@ const nextWorkout = computed(() => {
   const notDone = weekData.value.workouts.find(w => !progressStore.isCompleted(phaseId, weekData.value!.week, w.id))
   return notDone || weekData.value.workouts[0] || null
 })
+
+const todayKey = () => new Date().toISOString().slice(0, 10)
+const blockedForToday = computed(() => progressStore.lastWorkoutDate === todayKey())
+
+const advanceIfCompleted = () => {
+  const phaseId = currentPhase.value?.id
+  const weekNumber = weekData.value?.week
+  if (!phaseId || !weekNumber) return
+  if (weekHasRemaining(phaseId, weekNumber)) return
+
+  const phase = phases.value.find(p => p.id === phaseId)
+  const nextWeek = phase?.weeks.find(w => weekHasRemaining(phaseId, w.week))
+  if (nextWeek) {
+    selectedWeek.value = nextWeek.week
+    return
+  }
+
+  // Phase complete, move to next phase with remaining work
+  const nextPhase = phases.value.find(p => phaseHasRemaining(p.id))
+  if (nextPhase) {
+    selectedPhaseId.value = nextPhase.id
+    pickInitialWeek()
+    return
+  }
+
+  // All phases/weeks completed: reset to phase 1 / week 1 and clear progress
+  if (phases.value.length) {
+    progressStore.clear()
+    selectedPhaseId.value = phases.value[0].id
+    selectedWeek.value = phases.value[0].weeks[0]?.week ?? null
+  }
+}
+
+const isExerciseDone = (workoutId: string, exerciseId: string) => {
+  const phaseId = currentPhase.value?.id
+  const week = weekData.value?.week
+  if (!phaseId || !week) return false
+  return progressStore.isExerciseCompleted(phaseId, week, workoutId, exerciseId)
+}
+
+const activeExerciseId = (workout: { exercises: { id: string }[], id: string }) => {
+  const phaseId = currentPhase.value?.id
+  const week = weekData.value?.week
+  if (!phaseId || !week) return null
+  const firstIncomplete = workout.exercises.find(ex => !progressStore.isExerciseCompleted(phaseId, week, workout.id, ex.id))
+  return firstIncomplete?.id || null
+}
+
+const isActiveExercise = (workout: { id: string, exercises: { id: string }[] }, exerciseId: string) => {
+  return activeExerciseId(workout) === exerciseId
+}
 </script>
 
 <template>
@@ -171,13 +234,6 @@ const nextWorkout = computed(() => {
             Week {{ week.week }}
           </UButton>
         </div>
-        <UBadge
-          v-if="workouts.length"
-          color="primary"
-          variant="soft"
-        >
-          {{ workouts.length }} workout{{ workouts.length === 1 ? '' : 's' }} this week
-        </UBadge>
         <UCheckbox
           v-model="hideCompleted"
           label="Hide completed"
@@ -204,7 +260,7 @@ const nextWorkout = computed(() => {
           color="neutral"
           variant="soft"
         >
-          {{ nextWorkout.exercises.length }} moves
+          {{ nextWorkout.exercises.length }} exercises
         </UBadge>
       </div>
     </div>
@@ -224,7 +280,12 @@ const nextWorkout = computed(() => {
       v-else-if="!visibleWorkouts.length"
       class="rounded-lg border border-dashed border-muted/60 px-4 py-6 text-muted"
     >
-      No workouts found for this week.
+      <template v-if="blockedForToday">
+        Good job! Today's workout is done. Next one unlocks tomorrow.
+      </template>
+      <template v-else>
+        No workouts found for this week.
+      </template>
     </div>
 
     <div
@@ -236,6 +297,22 @@ const nextWorkout = computed(() => {
         :key="workout.id"
         class="flex flex-col gap-3"
       >
+        <div class="flex items-center gap-3">
+          <div class="flex-1 h-1.5 rounded-full bg-muted/40 overflow-hidden">
+            <div
+              class="h-full rounded-full bg-primary/70 transition-all"
+              :style="{ width: `${Math.round((workout.exercises.filter(ex => progressStore.isExerciseCompleted(currentPhase?.id || '', weekData?.week || 0, workout.id, ex.id)).length / workout.exercises.length) * 100)}%` }"
+            />
+          </div>
+          <span class="text-xs text-muted">
+            {{
+              workout.exercises.filter(ex =>
+                progressStore.isExerciseCompleted(currentPhase?.id || '', weekData?.week || 0, workout.id, ex.id)
+              ).length
+            }}/{{ workout.exercises.length }} done
+          </span>
+        </div>
+
         <div class="flex items-start justify-between gap-3">
           <div class="space-y-1">
             <p class="text-xs uppercase tracking-wide text-muted">
@@ -257,13 +334,13 @@ const nextWorkout = computed(() => {
               color="neutral"
               variant="outline"
             >
-              {{ workout.exercises.length }} moves
+              {{ workout.exercises.length }} exercises
             </UBadge>
             <UButton
               size="xs"
               :color="progressStore.isCompleted(currentPhase?.id || '', weekData?.week || 0, workout.id) ? 'primary' : 'neutral'"
               variant="soft"
-              @click="progressStore.toggleCompletion(currentPhase?.id || '', weekData?.week || 0, workout.id)"
+              @click="() => { progressStore.toggleCompletion(currentPhase?.id || '', weekData?.week || 0, workout.id); advanceIfCompleted() }"
             >
               <span v-if="progressStore.isCompleted(currentPhase?.id || '', weekData?.week || 0, workout.id)">Completed</span>
               <span v-else>Mark done</span>
@@ -275,56 +352,121 @@ const nextWorkout = computed(() => {
           <div
             v-for="exercise in workout.exercises"
             :key="exercise.id"
-            class="rounded-lg border border-muted/50 bg-muted/5 px-3 py-2"
+            class="rounded-lg border border-muted/50 bg-muted/5 px-3 py-2 transition-all"
+            :class="isExerciseDone(workout.id, exercise.id) ? 'opacity-60 line-through border-primary/40 bg-primary/5' : ''"
           >
             <div class="flex flex-wrap items-center gap-2">
-              <span class="text-sm font-medium">{{ exercise.name }}</span>
-              <UBadge
-                v-if="exercise.group"
-                color="primary"
-                variant="soft"
+              <UTooltip :text="isExerciseDone(workout.id, exercise.id) ? 'Completed' : 'Mark done'">
+                <UButton
+                  size="2xs"
+                  variant="ghost"
+                  :color="isExerciseDone(workout.id, exercise.id) ? 'primary' : 'neutral'"
+                  icon="i-lucide-check-circle-2"
+                  @click="() => progressStore.toggleExercise(currentPhase?.id || '', weekData?.week || 0, workout.id, exercise.id)"
+                />
+              </UTooltip>
+              <span
+                v-if="!exercise.link"
+                class="text-sm font-medium"
+              >{{ exercise.name }}</span>
+              <a
+                v-else
+                class="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                :href="exercise.link"
+                target="_blank"
+                rel="noreferrer"
               >
-                {{ exercise.group }}
-              </UBadge>
-              <UBadge
-                color="neutral"
-                variant="soft"
-              >
-                {{ exercise.reps }} reps
-              </UBadge>
-              <UBadge
-                color="neutral"
-                variant="soft"
-              >
-                {{ exercise.workingSets }} working sets<span v-if="exercise.warmupSets"> · {{ exercise.warmupSets }} warm-up</span>
-              </UBadge>
-              <UBadge
-                color="neutral"
-                variant="outline"
-              >
-                RPE {{ exercise.rpe }}
-              </UBadge>
+                {{ exercise.name }}
+              </a>
+              <template v-if="!isExerciseDone(workout.id, exercise.id)">
+                <template v-if="isActiveExercise(workout, exercise.id)">
+                  <UBadge
+                    v-if="exercise.group"
+                    color="primary"
+                    variant="soft"
+                  >
+                    {{ exercise.group }}
+                  </UBadge>
+                  <UBadge
+                    color="neutral"
+                    variant="soft"
+                  >
+                    {{ exercise.reps }} reps
+                  </UBadge>
+                  <UBadge
+                    color="neutral"
+                    variant="soft"
+                  >
+                    {{ exercise.workingSets }} working sets<span v-if="exercise.warmupSets"> · {{ exercise.warmupSets }} warm-up</span>
+                  </UBadge>
+                  <UBadge
+                    color="neutral"
+                    variant="outline"
+                  >
+                    RPE {{ exercise.rpe }}
+                  </UBadge>
+                </template>
+                <template v-else>
+                  <UBadge
+                    color="neutral"
+                    variant="soft"
+                  >
+                    {{ exercise.reps }} reps
+                  </UBadge>
+                  <UBadge
+                    color="neutral"
+                    variant="soft"
+                  >
+                    {{ exercise.workingSets }} sets
+                  </UBadge>
+                  <UBadge
+                    color="neutral"
+                    variant="outline"
+                  >
+                    RPE {{ exercise.rpe }}
+                  </UBadge>
+                </template>
+              </template>
             </div>
             <p
-              v-if="exercise.notes"
+              v-if="exercise.notes && !isExerciseDone(workout.id, exercise.id) && isActiveExercise(workout, exercise.id)"
               class="text-sm text-muted"
             >
               {{ exercise.notes }}
             </p>
             <div
-              v-if="exercise.subs?.length"
+              v-if="exercise.subs?.length && !isExerciseDone(workout.id, exercise.id) && isActiveExercise(workout, exercise.id)"
               class="flex flex-wrap gap-2 pt-1"
             >
-              <UBadge
+              <div
                 v-for="(sub, idx) in exercise.subs"
                 :key="idx"
-                color="primary"
-                variant="ghost"
+                class="flex items-center gap-1"
               >
-                Sub: {{ sub }}
-              </UBadge>
+                <UBadge
+                  color="primary"
+                  variant="ghost"
+                >
+                  Sub:
+                  <span v-if="!sub.link">
+                    {{ sub.name }}
+                  </span>
+                  <a
+                    v-else
+                    class="text-primary underline-offset-4 hover:underline"
+                    :href="sub.link"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {{ sub.name }}
+                  </a>
+                </UBadge>
+              </div>
             </div>
-            <p class="text-xs text-muted">
+            <p
+              v-if="!isExerciseDone(workout.id, exercise.id) && isActiveExercise(workout, exercise.id)"
+              class="text-xs text-muted"
+            >
               Rest {{ exercise.rest }}
             </p>
           </div>

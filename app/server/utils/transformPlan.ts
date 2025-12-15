@@ -16,6 +16,9 @@ type ExerciseRow = {
   sub2?: string
   notes?: string
   group?: string
+  link?: string
+  sub1_link?: string
+  sub2_link?: string
 }
 
 export type NormalizedPlan = {
@@ -142,8 +145,12 @@ export function transformPlan(data: SheetData): NormalizedPlan {
                   load: cleanText(ex.load),
                   rpe: cleanText(ex.rpe),
                   rest: cleanText(ex.rest),
-                  subs: [cleanText(ex.sub1), cleanText(ex.sub2)].filter(Boolean),
-                  notes: cleanText(ex.notes)
+                  subs: [
+                    { name: cleanText(ex.sub1), link: cleanText(ex.sub1_link) },
+                    { name: cleanText(ex.sub2), link: cleanText(ex.sub2_link) }
+                  ].filter(sub => sub.name),
+                  notes: cleanText(ex.notes),
+                  link: cleanText(ex.link)
                 }))
             }))
           }))
