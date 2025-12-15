@@ -1,5 +1,5 @@
 <script setup>
-const title = 'Gym Plan'
+const title = 'Reimo\'s Gym'
 const description = 'Offline-friendly viewer for your Google Sheets workout plans.'
 
 useHead({
@@ -39,7 +39,7 @@ onMounted(() => {
             name="i-lucide-dumbbell"
             class="h-5 w-5"
           />
-          <span>Gym Plan</span>
+          <span>Reimo&apos;s Gym</span>
         </NuxtLink>
       </template>
 
