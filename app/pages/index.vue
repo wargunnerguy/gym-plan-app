@@ -681,16 +681,16 @@ const workoutDuration = (workout: WorkoutItem) => {
                 />
               </div>
             </div>
-            <p
-              v-if="exercise.notes"
-              class="text-xs text-muted mt-1"
-            >
-              {{ exercise.notes }}
-            </p>
             <div
               v-if="isDetailsOpen(workout, exercise.id)"
-              class="mt-2"
+              class="mt-2 space-y-2"
             >
+              <p
+                v-if="exercise.notes"
+                class="text-xs text-muted"
+              >
+                {{ exercise.notes }}
+              </p>
               <div class="overflow-hidden rounded-lg bg-muted/5">
                 <div
                   v-if="exercise.warmupSets"
