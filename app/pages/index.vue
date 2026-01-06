@@ -430,6 +430,35 @@ const cleanSubs = (subs?: { name: string, link?: string }[]) => {
   })
 }
 
+const settingsOpen = ref(false)
+const settingsPhase = ref<string | null>(null)
+const settingsWeek = ref<number | null>(null)
+
+watch(settingsOpen, (open) => {
+  if (open) {
+    settingsPhase.value = selectedPhaseId.value ?? phases.value[0]?.id ?? null
+    const targetPhase = phases.value.find(p => p.id === settingsPhase.value)
+    settingsWeek.value = targetPhase?.weeks[0]?.week ?? null
+  }
+})
+
+const settingsWeeks = computed(() => {
+  const phase = phases.value.find(p => p.id === settingsPhase.value)
+  return phase?.weeks || []
+})
+
+const applySettings = () => {
+  if (settingsPhase.value) {
+    selectedPhaseId.value = settingsPhase.value
+  }
+  if (settingsWeek.value !== null) {
+    selectedWeek.value = settingsWeek.value
+  } else {
+    pickInitialWeek()
+  }
+  settingsOpen.value = false
+}
+
 const parseRestRange = (rest: string) => {
   const matches = String(rest || '').match(/(\d+(\.\d+)?)/g)
   if (!matches || !matches.length) return { min: 0, max: 0 }
@@ -495,6 +524,14 @@ const workoutDuration = (workout: WorkoutItem) => {
         >
           v{{ appVersion }}
         </span>
+        <UButton
+          size="xs"
+          variant="ghost"
+          icon="i-lucide-settings"
+          @click="settingsOpen = true"
+        >
+          Settings
+        </UButton>
       </div>
     </header>
 
@@ -855,5 +892,68 @@ const workoutDuration = (workout: WorkoutItem) => {
         </div>
       </div>
     </div>
+
+    <UModal v-model="settingsOpen">
+      <div class="space-y-4 p-4">
+        <div class="space-y-1">
+          <p class="text-sm font-semibold">
+            Set phase and week
+          </p>
+          <p class="text-xs text-muted">
+            Use this if you need to resume mid-plan after clearing data.
+          </p>
+        </div>
+        <div class="space-y-2">
+          <label class="text-xs uppercase tracking-wide text-muted">
+            Phase
+          </label>
+          <select
+            v-model="settingsPhase"
+            class="w-full rounded-md border border-muted/60 bg-white px-2 py-1 text-sm dark:bg-gray-900"
+          >
+            <option
+              v-for="phase in phases"
+              :key="phase.id"
+              :value="phase.id"
+            >
+              {{ phase.name }}
+            </option>
+          </select>
+        </div>
+        <div class="space-y-2">
+          <label class="text-xs uppercase tracking-wide text-muted">
+            Week
+          </label>
+          <select
+            v-model.number="settingsWeek"
+            class="w-full rounded-md border border-muted/60 bg-white px-2 py-1 text-sm dark:bg-gray-900"
+          >
+            <option
+              v-for="week in settingsWeeks"
+              :key="week.week"
+              :value="week.week"
+            >
+              Week {{ week.week }}
+            </option>
+          </select>
+        </div>
+        <div class="flex justify-end gap-2">
+          <UButton
+            variant="ghost"
+            size="sm"
+            @click="settingsOpen = false"
+          >
+            Cancel
+          </UButton>
+          <UButton
+            size="sm"
+            color="primary"
+            @click="applySettings"
+          >
+            Apply
+          </UButton>
+        </div>
+      </div>
+    </UModal>
   </UContainer>
 </template>
