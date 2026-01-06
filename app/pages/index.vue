@@ -430,7 +430,7 @@ const cleanSubs = (subs?: { name: string, link?: string }[]) => {
   })
 }
 
-const settingsOpen = ref(false)
+const settingsOpen = useState('settingsOpen', () => false)
 const settingsPhase = ref<string | null>(null)
 const settingsWeek = ref<number | null>(null)
 
@@ -446,6 +446,14 @@ const settingsWeeks = computed(() => {
   const phase = phases.value.find(p => p.id === settingsPhase.value)
   return phase?.weeks || []
 })
+
+const settingsPhaseOptions = computed(() =>
+  phases.value.map(phase => ({ label: phase.name, value: phase.id }))
+)
+
+const settingsWeekOptions = computed(() =>
+  settingsWeeks.value.map(week => ({ label: `Week ${week.week}`, value: week.week }))
+)
 
 const applySettings = () => {
   if (settingsPhase.value) {
@@ -907,35 +915,21 @@ const workoutDuration = (workout: WorkoutItem) => {
           <label class="text-xs uppercase tracking-wide text-muted">
             Phase
           </label>
-          <select
+          <USelect
             v-model="settingsPhase"
-            class="w-full rounded-md border border-muted/60 bg-white px-2 py-1 text-sm dark:bg-gray-900"
-          >
-            <option
-              v-for="phase in phases"
-              :key="phase.id"
-              :value="phase.id"
-            >
-              {{ phase.name }}
-            </option>
-          </select>
+            :options="settingsPhaseOptions"
+          />
         </div>
         <div class="space-y-2">
           <label class="text-xs uppercase tracking-wide text-muted">
             Week
           </label>
-          <select
-            v-model.number="settingsWeek"
-            class="w-full rounded-md border border-muted/60 bg-white px-2 py-1 text-sm dark:bg-gray-900"
-          >
-            <option
-              v-for="week in settingsWeeks"
-              :key="week.week"
-              :value="week.week"
-            >
-              Week {{ week.week }}
-            </option>
-          </select>
+          <USelect
+            v-model="settingsWeek"
+            :options="settingsWeekOptions"
+            value-attribute="value"
+            option-attribute="label"
+          />
         </div>
         <div class="flex justify-end gap-2">
           <UButton

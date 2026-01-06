@@ -1,6 +1,7 @@
 <script setup>
 const title = 'Reimo\'s Gym'
 const description = 'Offline-friendly viewer for your Google Sheets workout plans.'
+const settingsOpen = useState('settingsOpen', () => false)
 
 useHead({
   meta: [
@@ -44,6 +45,12 @@ onMounted(() => {
       </template>
 
       <template #right>
+        <UButton
+          size="sm"
+          variant="ghost"
+          icon="i-lucide-settings"
+          @click="settingsOpen = true"
+        />
         <UColorModeButton />
       </template>
     </UHeader>
