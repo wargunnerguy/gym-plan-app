@@ -497,14 +497,27 @@ const workoutDuration = (workout: WorkoutItem) => {
         >
           v{{ appVersion }}
         </span>
-        <UButton
-          size="xs"
-          variant="ghost"
-          icon="i-lucide-settings"
-          @click="settingsOpen = true"
-        >
-          Settings
-        </UButton>
+      </div>
+      <div
+        v-if="currentPhase && selectedWeek"
+        class="mt-2 inline-flex divide-x divide-muted/60 overflow-hidden rounded-lg border border-muted/60 text-sm"
+      >
+        <div class="px-3 py-2">
+          <p class="text-xs uppercase tracking-wide text-muted">
+            Phase
+          </p>
+          <p class="font-semibold">
+            {{ currentPhase.name }}
+          </p>
+        </div>
+        <div class="px-3 py-2">
+          <p class="text-xs uppercase tracking-wide text-muted">
+            Week
+          </p>
+          <p class="font-semibold">
+            Week {{ selectedWeek }}
+          </p>
+        </div>
       </div>
     </header>
 
