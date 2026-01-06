@@ -326,6 +326,7 @@ const handleExerciseToggle = (workout: WorkoutItem, exerciseId: string) => {
   progressStore.toggleExercise(phaseId, week, workout.id, exerciseId)
   setOpenForExercise(workout.id, exerciseId, false)
   openNextActive(workout)
+  syncWorkoutCompletion(workout)
 }
 
 const handleWarmupToggle = (workout: WorkoutItem, exerciseId: string) => {
@@ -333,6 +334,7 @@ const handleWarmupToggle = (workout: WorkoutItem, exerciseId: string) => {
   const week = weekData.value?.week
   if (!phaseId || !week) return
   progressStore.toggleWarmup(phaseId, week, workout.id, exerciseId)
+  syncWorkoutCompletion(workout)
 }
 
 const completionPatternStyle = {
@@ -416,6 +418,24 @@ const workoutCompletionParts = (workout: WorkoutItem) => {
   })
 
   return { completed, total: total || 1 }
+}
+
+const workoutFullyDone = (workout: WorkoutItem) => {
+  const phaseId = currentPhase.value?.id
+  const week = weekData.value?.week
+  if (!phaseId || !week) return false
+  return workout.exercises.every(ex => isExerciseDone(workout, ex))
+}
+
+const syncWorkoutCompletion = (workout: WorkoutItem) => {
+  const phaseId = currentPhase.value?.id
+  const week = weekData.value?.week
+  if (!phaseId || !week) return
+  const shouldBeDone = workoutFullyDone(workout)
+  const isDone = progressStore.isCompleted(phaseId, week, workout.id)
+  if (shouldBeDone !== isDone) {
+    progressStore.toggleCompletion(phaseId, week, workout.id)
+  }
 }
 
 const toNumber = (input: string) => {
