@@ -36,6 +36,9 @@ const phaseOptions = computed(() =>
   }))
 )
 const phases = computed(() => currentPlan.value?.phases || [])
+const orderedPhases = computed(() =>
+  [...phases.value].sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+)
 
 const selectedPhaseId = useState<string | null>('selectedPhaseId', () => null)
 
@@ -63,9 +66,8 @@ watch(
 )
 
 const currentPhase = computed(() => {
-  const phases = currentPlan.value?.phases || []
-  if (!phases.length) return null
-  return phases.find(p => p.id === selectedPhaseId.value) || phases[0]
+  if (!orderedPhases.value.length) return null
+  return orderedPhases.value.find(p => p.id === selectedPhaseId.value) || orderedPhases.value[0]
 })
 
 onMounted(async () => {
@@ -205,27 +207,34 @@ const advanceIfCompleted = () => {
   if (!phaseId || !weekNumber) return
   if (weekHasRemaining(phaseId, weekNumber)) return
 
-  const phase = phases.value.find(p => p.id === phaseId)
-  const nextWeek = phase?.weeks.find(w => weekHasRemaining(phaseId, w.week))
+  const ordered = orderedPhases.value
+  const currentPhaseIdx = ordered.findIndex(p => p.id === phaseId)
+  const phase = ordered[currentPhaseIdx]
+
+  // Next remaining week in the same phase by order
+  const nextWeek = phase?.weeks
+    ?.filter(w => w.week > weekNumber)
+    .find(w => weekHasRemaining(phaseId, w.week))
   if (nextWeek) {
     selectedWeek.value = nextWeek.week
     return
   }
 
-  // Phase complete, move to next phase with remaining work
-  const nextPhase = phases.value.find(p => phaseHasRemaining(p.id))
-  if (nextPhase) {
-    selectedPhaseId.value = nextPhase.id
-    pickInitialWeek()
+  // Move to next phase in sequence (wrap)
+  if (!ordered.length) return
+  const nextPhaseIdx = (currentPhaseIdx + 1) % ordered.length
+  const wrapped = nextPhaseIdx === 0 && currentPhaseIdx === ordered.length - 1
+
+  if (wrapped) {
+    // Completed all phases/weeks: reset and clear progress
+    progressStore.clear()
+    selectedPhaseId.value = ordered[0].id
+    selectedWeek.value = ordered[0].weeks[0]?.week ?? null
     return
   }
 
-  // All phases/weeks completed: reset to phase 1 / week 1 and clear progress
-  if (phases.value.length) {
-    progressStore.clear()
-    selectedPhaseId.value = phases.value[0].id
-    selectedWeek.value = phases.value[0].weeks[0]?.week ?? null
-  }
+  selectedPhaseId.value = ordered[nextPhaseIdx].id
+  pickInitialWeek()
 }
 
 const isMainCompleted = (workoutId: string, exerciseId: string) => {
@@ -666,7 +675,7 @@ const workoutDuration = (workout: WorkoutItem) => {
         <div class="flex items-start justify-between gap-3">
           <div class="space-y-1">
             <p class="text-xs uppercase tracking-wide text-muted">
-              Day {{ workout.order }}
+              Day {{ workout.order }}<span v-if="weekData?.workouts?.length">/{{ weekData?.workouts.length }}</span>
             </p>
             <h2 class="text-xl font-semibold">
               {{ workout.dayName }}
