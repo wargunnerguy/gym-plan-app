@@ -1,7 +1,23 @@
 <script setup>
+import { usePlanStore } from '@/stores/plan'
+
 const title = 'Reimo\'s Gym'
 const description = 'Offline-friendly viewer for your Google Sheets workout plans.'
 const settingsOpen = useState('settingsOpen', () => false)
+const selectedPhaseId = useState('selectedPhaseId', () => null)
+const selectedWeek = useState('selectedWeek', () => null)
+
+const planStore = usePlanStore()
+const currentPlan = computed(() => planStore.activePlan)
+const phases = computed(() => currentPlan.value?.phases || [])
+const currentPhase = computed(() => {
+  if (!phases.value.length) return null
+  return phases.value.find(p => p.id === selectedPhaseId.value) || phases.value[0]
+})
+const currentPhaseIndex = computed(() => {
+  if (!phases.value.length || !currentPhase.value) return null
+  return phases.value.findIndex(p => p.id === currentPhase.value?.id)
+})
 
 useHead({
   meta: [
@@ -22,6 +38,9 @@ useSeoMeta({
 })
 
 onMounted(() => {
+  if (!planStore.plans.length) {
+    planStore.load().catch(() => {})
+  }
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {})
   }

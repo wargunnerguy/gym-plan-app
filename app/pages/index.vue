@@ -37,7 +37,7 @@ const phaseOptions = computed(() =>
 )
 const phases = computed(() => currentPlan.value?.phases || [])
 
-const selectedPhaseId = ref<string | null>(null)
+const selectedPhaseId = useState<string | null>('selectedPhaseId', () => null)
 
 const phaseHasRemaining = (phaseId: string) => {
   const phase = phases.value.find(p => p.id === phaseId)
@@ -86,7 +86,7 @@ const weekOptions = computed(() =>
 )
 const weeks = computed(() => currentPhase.value?.weeks || [])
 
-const selectedWeek = ref<number | null>(null)
+const selectedWeek = useState<number | null>('selectedWeek', () => null)
 
 const weekHasRemaining = (phaseId: string, weekNumber: number) => {
   const phase = phases.value.find(p => p.id === phaseId)
@@ -483,29 +483,6 @@ const workoutDuration = (workout: WorkoutItem) => {
     class="space-y-6 py-6"
     :class="{ 'pb-24': Boolean(stickyTarget) }"
   >
-    <header class="space-y-2">
-      <div
-        v-if="currentPhase && selectedWeek && currentPlan"
-        class="inline-flex divide-x divide-muted/60 overflow-hidden rounded-lg border border-muted/60 text-sm"
-      >
-        <div class="px-3 py-2">
-          <p class="font-semibold">
-            {{ currentPhase.name }}
-          </p>
-        </div>
-        <div class="px-3 py-2">
-          <p class="font-semibold">
-            Week {{ selectedWeek }}
-          </p>
-        </div>
-        <div class="px-3 py-2">
-          <p class="font-semibold">
-            {{ currentPlan.name }}
-          </p>
-        </div>
-      </div>
-    </header>
-
     <div
       v-if="planStore.error"
       class="rounded-lg border border-amber-400/60 bg-amber-50/60 px-4 py-3 text-amber-900 dark:border-amber-300/60 dark:bg-amber-900/20 dark:text-amber-100"
@@ -513,63 +490,26 @@ const workoutDuration = (workout: WorkoutItem) => {
       {{ planStore.error }}
     </div>
 
-    <transition name="fade">
-      <div
-        v-if="settingsOpen"
-        class="fixed right-4 top-16 z-50 w-72 rounded-lg border border-muted/60 bg-white p-4 shadow-lg dark:bg-gray-900"
-      >
-        <div class="flex items-center justify-between">
-          <div>
-            <p class="text-sm font-semibold">
-              Jump to phase/week
-            </p>
-            <p class="text-xs text-muted">
-              Pick where you are in the plan.
-            </p>
-          </div>
-          <UButton
-            variant="ghost"
-            size="2xs"
-            icon="i-lucide-x"
-            @click="settingsOpen = false"
-          />
-        </div>
-        <div class="mt-3 space-y-2">
-          <p class="text-xs uppercase tracking-wide text-muted">
-            Phase
-          </p>
-          <div class="flex flex-wrap gap-2">
-            <UButton
-              v-for="phase in phases"
-              :key="phase.id"
-              size="xs"
-              :color="phase.id === selectedPhaseId ? 'primary' : 'neutral'"
-              :variant="phase.id === selectedPhaseId ? 'soft' : 'ghost'"
-              @click="() => { selectedPhaseId = phase.id; selectedWeek = phases.find(p => p.id === phase.id)?.weeks[0]?.week ?? null; settingsOpen = false }"
-            >
-              {{ phase.name }}
-            </UButton>
-          </div>
-        </div>
-        <div class="mt-3 space-y-2">
-          <p class="text-xs uppercase tracking-wide text-muted">
-            Week
-          </p>
-          <div class="flex flex-wrap gap-2">
-            <UButton
-              v-for="week in weeks"
-              :key="week.week"
-              size="xs"
-              :color="week.week === selectedWeek ? 'primary' : 'neutral'"
-              :variant="week.week === selectedWeek ? 'soft' : 'ghost'"
-              @click="() => { selectedWeek = week.week; settingsOpen = false }"
-            >
-              Week {{ week.week }}
-            </UButton>
-          </div>
-        </div>
+    <div
+      v-if="currentPhase && selectedWeek && currentPlan"
+      class="inline-flex divide-x divide-muted/60 overflow-hidden rounded-lg border border-muted/60 text-sm"
+    >
+      <div class="px-3 py-2">
+        <p class="font-semibold">
+          {{ currentPhase.name }}
+        </p>
       </div>
-    </transition>
+      <div class="px-3 py-2">
+        <p class="font-semibold">
+          Week {{ selectedWeek }}
+        </p>
+      </div>
+      <div class="px-3 py-2">
+        <p class="font-semibold">
+          {{ currentPlan.name }}
+        </p>
+      </div>
+    </div>
 
     <div
       v-if="planStore.loading"
