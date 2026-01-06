@@ -431,48 +431,6 @@ const cleanSubs = (subs?: { name: string, link?: string }[]) => {
 }
 
 const settingsOpen = useState('settingsOpen', () => false)
-const settingsPhase = ref<string | null>(null)
-const settingsWeek = ref<number | null>(null)
-
-watch(settingsOpen, (open) => {
-  if (open) {
-    settingsPhase.value = selectedPhaseId.value ?? phases.value[0]?.id ?? null
-    const targetPhase = phases.value.find(p => p.id === settingsPhase.value)
-    settingsWeek.value = targetPhase?.weeks[0]?.week ?? null
-  }
-})
-
-const settingsWeeks = computed(() => {
-  const phase = phases.value.find(p => p.id === settingsPhase.value)
-  return phase?.weeks || []
-})
-
-const settingsPhaseOptions = computed(() =>
-  phases.value.map(phase => ({ label: phase.name, value: phase.id }))
-)
-
-const settingsWeekOptions = computed(() =>
-  settingsWeeks.value.map(week => ({ label: `Week ${week.week}`, value: week.week }))
-)
-
-watch(settingsPhase, (phaseId) => {
-  const phase = phases.value.find(p => p.id === phaseId)
-  if (phase) {
-    settingsWeek.value = phase.weeks[0]?.week ?? null
-  }
-})
-
-const applySettings = () => {
-  if (settingsPhase.value) {
-    selectedPhaseId.value = settingsPhase.value
-  }
-  if (settingsWeek.value !== null) {
-    selectedWeek.value = settingsWeek.value
-  } else {
-    pickInitialWeek()
-  }
-  settingsOpen.value = false
-}
 
 const parseRestRange = (rest: string) => {
   const matches = String(rest || '').match(/(\d+(\.\d+)?)/g)
@@ -557,49 +515,63 @@ const workoutDuration = (workout: WorkoutItem) => {
       {{ planStore.error }}
     </div>
 
-    <div class="space-y-3">
-      <div class="flex flex-wrap items-center gap-2">
-        <p class="text-xs uppercase tracking-wide text-muted">
-          Phase
-        </p>
-        <div class="flex flex-wrap gap-2">
+    <transition name="fade">
+      <div
+        v-if="settingsOpen"
+        class="fixed right-4 top-16 z-50 w-72 rounded-lg border border-muted/60 bg-white p-4 shadow-lg dark:bg-gray-900"
+      >
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm font-semibold">
+              Jump to phase/week
+            </p>
+            <p class="text-xs text-muted">
+              Pick where you are in the plan.
+            </p>
+          </div>
           <UButton
-            v-for="phase in phases"
-            :key="phase.id"
-            size="xs"
-            :color="phase.id === selectedPhaseId ? 'primary' : 'neutral'"
-            :variant="phase.id === selectedPhaseId ? 'outline' : 'ghost'"
-            :class="phase.id === selectedPhaseId ? 'border-2 font-semibold' : 'font-normal'"
-            @click="selectedPhaseId = phase.id"
-          >
-            {{ phase.name }}
-          </UButton>
+            variant="ghost"
+            size="2xs"
+            icon="i-lucide-x"
+            @click="settingsOpen = false"
+          />
+        </div>
+        <div class="mt-3 space-y-2">
+          <p class="text-xs uppercase tracking-wide text-muted">
+            Phase
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <UButton
+              v-for="phase in phases"
+              :key="phase.id"
+              size="xs"
+              :color="phase.id === selectedPhaseId ? 'primary' : 'neutral'"
+              :variant="phase.id === selectedPhaseId ? 'soft' : 'ghost'"
+              @click="() => { selectedPhaseId = phase.id; selectedWeek = phases.find(p => p.id === phase.id)?.weeks[0]?.week ?? null; settingsOpen = false }"
+            >
+              {{ phase.name }}
+            </UButton>
+          </div>
+        </div>
+        <div class="mt-3 space-y-2">
+          <p class="text-xs uppercase tracking-wide text-muted">
+            Week
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <UButton
+              v-for="week in weeks"
+              :key="week.week"
+              size="xs"
+              :color="week.week === selectedWeek ? 'primary' : 'neutral'"
+              :variant="week.week === selectedWeek ? 'soft' : 'ghost'"
+              @click="() => { selectedWeek = week.week; settingsOpen = false }"
+            >
+              Week {{ week.week }}
+            </UButton>
+          </div>
         </div>
       </div>
-      <div class="flex flex-wrap items-center gap-2">
-        <p class="text-xs uppercase tracking-wide text-muted">
-          Week
-        </p>
-        <div class="flex flex-wrap items-center gap-0">
-          <template v-for="(week, idx) in weeks" :key="week.week">
-            <button
-              type="button"
-              class="flex items-center justify-center rounded-full border transition-all"
-              :class="week.week === selectedWeek ? 'h-8 w-8 border-2 border-primary font-semibold text-primary text-xs' : 'h-4 w-4 border-muted/60 bg-muted/40'"
-              :aria-label="`Week ${week.week}`"
-              @click="selectedWeek = week.week"
-            >
-              <span v-if="week.week === selectedWeek">{{ week.week }}</span>
-            </button>
-            <span
-              v-if="idx < weeks.length - 1"
-              class="mx-1 h-px w-8 bg-muted/60"
-            >
-            </span>
-          </template>
-        </div>
-      </div>
-    </div>
+    </transition>
 
     <div
       v-if="planStore.loading"
@@ -908,67 +880,5 @@ const workoutDuration = (workout: WorkoutItem) => {
       </div>
     </div>
 
-    <UModal v-model="settingsOpen">
-      <div class="space-y-4 p-4">
-        <div class="space-y-1">
-          <p class="text-sm font-semibold">
-            Set phase and week
-          </p>
-          <p class="text-xs text-muted">
-            Use this if you need to resume mid-plan after clearing data.
-          </p>
-        </div>
-        <div class="space-y-2">
-          <label class="text-xs uppercase tracking-wide text-muted">
-            Phase
-          </label>
-          <select
-            v-model="settingsPhase"
-            class="w-full rounded-md border border-muted/60 bg-white px-2 py-1 text-sm dark:bg-gray-900"
-          >
-            <option
-              v-for="phase in settingsPhaseOptions"
-              :key="phase.value"
-              :value="phase.value"
-            >
-              {{ phase.label }}
-            </option>
-          </select>
-        </div>
-        <div class="space-y-2">
-          <label class="text-xs uppercase tracking-wide text-muted">
-            Week
-          </label>
-          <select
-            v-model.number="settingsWeek"
-            class="w-full rounded-md border border-muted/60 bg-white px-2 py-1 text-sm dark:bg-gray-900"
-          >
-            <option
-              v-for="week in settingsWeekOptions"
-              :key="week.value"
-              :value="week.value"
-            >
-              {{ week.label }}
-            </option>
-          </select>
-        </div>
-        <div class="flex justify-end gap-2">
-          <UButton
-            variant="ghost"
-            size="sm"
-            @click="settingsOpen = false"
-          >
-            Cancel
-          </UButton>
-          <UButton
-            size="sm"
-            color="primary"
-            @click="applySettings"
-          >
-            Apply
-          </UButton>
-        </div>
-      </div>
-    </UModal>
   </UContainer>
 </template>
