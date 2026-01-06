@@ -484,23 +484,9 @@ const workoutDuration = (workout: WorkoutItem) => {
     :class="{ 'pb-24': Boolean(stickyTarget) }"
   >
     <header class="space-y-2">
-      <p class="text-sm uppercase tracking-wide text-muted">
-        Plan
-      </p>
-      <div class="flex flex-wrap items-center gap-3">
-        <h1 class="text-3xl font-semibold">
-          {{ currentPlan?.name || 'Loading plan' }}
-        </h1>
-        <span
-          v-if="appVersion"
-          class="text-sm font-semibold text-muted"
-        >
-          v{{ appVersion }}
-        </span>
-      </div>
       <div
-        v-if="currentPhase && selectedWeek"
-        class="mt-2 inline-flex divide-x divide-muted/60 overflow-hidden rounded-lg border border-muted/60 text-sm"
+        v-if="currentPhase && selectedWeek && currentPlan"
+        class="inline-flex divide-x divide-muted/60 overflow-hidden rounded-lg border border-muted/60 text-sm"
       >
         <div class="px-3 py-2">
           <p class="font-semibold">
@@ -510,6 +496,11 @@ const workoutDuration = (workout: WorkoutItem) => {
         <div class="px-3 py-2">
           <p class="font-semibold">
             Week {{ selectedWeek }}
+          </p>
+        </div>
+        <div class="px-3 py-2">
+          <p class="font-semibold">
+            {{ currentPlan.name }}
           </p>
         </div>
       </div>
