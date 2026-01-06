@@ -435,6 +435,9 @@ const syncWorkoutCompletion = (workout: WorkoutItem) => {
   const isDone = progressStore.isCompleted(phaseId, week, workout.id)
   if (shouldBeDone !== isDone) {
     progressStore.toggleCompletion(phaseId, week, workout.id)
+    if (shouldBeDone) {
+      advanceIfCompleted()
+    }
   }
 }
 
@@ -579,7 +582,7 @@ const workoutDuration = (workout: WorkoutItem) => {
       </div>
       <div class="px-3 py-2">
         <p class="font-semibold">
-          Week {{ selectedWeek }}
+          Week {{ selectedWeek }}<span v-if="weeks.length">/{{ weeks.length }}</span>
         </p>
       </div>
       <div class="px-3 py-2">
