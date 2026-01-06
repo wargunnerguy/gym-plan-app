@@ -344,11 +344,27 @@ const rowCompletionStyle = (done: boolean) => done ? completionPatternStyle : {}
 
 const setBorderClass = (done: boolean) => done ? 'border-2 border-solid border-l-4 border-muted' : 'border-2 border-dashed border-muted/60'
 
+const isLinkedBelow = (workout: WorkoutItem, idx: number) => {
+  const current = workout.exercises[idx]
+  const next = workout.exercises[idx + 1]
+  if (!current?.group || !next?.group) return false
+  return current.group === next.group
+}
+
+const isLinkedAbove = (workout: WorkoutItem, idx: number) => {
+  const current = workout.exercises[idx]
+  const prev = workout.exercises[idx - 1]
+  if (!current?.group || !prev?.group) return false
+  return current.group === prev.group
+}
+
 const stickyTarget = computed(() => {
   const workout = currentWorkout.value
   const phaseId = currentPhase.value?.id
   const week = weekData.value?.week
   if (!phaseId || !week || !workout) return null
+  if (!visibleWorkouts.value.length) return null
+  if (progressStore.isCompleted(phaseId, week, workout.id)) return null
 
   const segment = nextIncompleteSegment(workout)
   if (!segment) return null
@@ -636,7 +652,7 @@ const workoutDuration = (workout: WorkoutItem) => {
 
         <div class="space-y-2">
           <div
-            v-for="exercise in workout.exercises"
+            v-for="(exercise, idx) in workout.exercises"
             :key="exercise.id"
             class="rounded-lg border border-muted/50 bg-muted/5 px-3 py-2 transition-all"
             :class="isExerciseDone(workout, exercise) ? 'opacity-60 line-through border-primary/40 bg-primary/5' : ''"
@@ -668,7 +684,12 @@ const workoutDuration = (workout: WorkoutItem) => {
                   {{ exercise.name }}
                 </a>
                 <span class="text-xs text-muted">
-                  Rest {{ exercise.rest }}
+                  <template v-if="isLinkedBelow(workout, idx)">
+                    No rest to next
+                  </template>
+                  <template v-else>
+                    Rest {{ exercise.rest }}
+                  </template>
                 </span>
               </div>
               <div class="flex items-center gap-2">
@@ -763,13 +784,6 @@ const workoutDuration = (workout: WorkoutItem) => {
               </div>
             </div>
             <template v-if="!isExerciseDone(workout, exercise) && isDetailsOpen(workout, exercise.id)">
-              <UBadge
-                v-if="exercise.group"
-                color="primary"
-                variant="soft"
-              >
-                {{ exercise.group }}
-              </UBadge>
               <div
                 v-if="cleanSubs(exercise.subs).length"
                 class="flex flex-wrap gap-2 pt-1"
