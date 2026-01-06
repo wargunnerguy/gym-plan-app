@@ -244,8 +244,26 @@ const isWarmupCompleted = (workoutId: string, exerciseId: string) => {
 
 const isExerciseDone = (workout: WorkoutItem, exercise: ExerciseItem) => {
   const mainDone = isMainCompleted(workout.id, exercise.id)
-  const warmDone = exercise.warmupSets ? isWarmupCompleted(workout.id, exercise.id) : true
+  const hasWarmup = toNumber(exercise.warmupSets) > 0
+  const warmDone = hasWarmup ? isWarmupCompleted(workout.id, exercise.id) : true
   return mainDone && warmDone
+}
+
+const nextIncompleteSegment = (workout: WorkoutItem) => {
+  const phaseId = currentPhase.value?.id
+  const week = weekData.value?.week
+  if (!phaseId || !week) return null
+
+  for (const exercise of workout.exercises) {
+    const hasWarmup = toNumber(exercise.warmupSets) > 0
+    if (hasWarmup && !isWarmupCompleted(workout.id, exercise.id)) {
+      return { exercise, stage: 'warmup' as const }
+    }
+    if (!isMainCompleted(workout.id, exercise.id)) {
+      return { exercise, stage: 'main' as const }
+    }
+  }
+  return null
 }
 
 const activeExerciseId = (workout: WorkoutItem) => {
@@ -332,23 +350,13 @@ const stickyTarget = computed(() => {
   const week = weekData.value?.week
   if (!phaseId || !week || !workout) return null
 
-  const preferred = stickyExerciseRef.value?.workoutId === workout.id
-    ? workout.exercises.find(ex => ex.id === stickyExerciseRef.value?.exerciseId)
-    : null
-
-  const activeId = activeExerciseId(workout)
-  const fallback = activeId ? workout.exercises.find(ex => ex.id === activeId) : null
-  const candidate = preferred && !isExerciseDone(workout, preferred) ? preferred : fallback
-  if (!candidate || isExerciseDone(workout, candidate)) return null
-
-  const stage = candidate.warmupSets && !isWarmupCompleted(workout.id, candidate.id)
-    ? 'warmup'
-    : 'main'
+  const segment = nextIncompleteSegment(workout)
+  if (!segment) return null
 
   return {
     workoutId: workout.id,
-    exercise: candidate,
-    stage
+    exercise: segment.exercise,
+    stage: segment.stage
   }
 })
 
@@ -383,7 +391,7 @@ const workoutCompletionParts = (workout: WorkoutItem) => {
   let completed = 0
 
   workout.exercises.forEach(exercise => {
-    const hasWarmup = Boolean(exercise.warmupSets)
+    const hasWarmup = toNumber(exercise.warmupSets) > 0
     total += hasWarmup ? 2 : 1
     if (phaseId && week) {
       if (hasWarmup && isWarmupCompleted(workout.id, exercise.id)) completed += 1
