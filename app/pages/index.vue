@@ -380,20 +380,6 @@ const workoutDuration = (workout: WorkoutItem) => {
         <h1 class="text-3xl font-semibold">
           {{ currentPlan?.name || 'Loading plan' }}
         </h1>
-        <UBadge
-          v-if="currentPhase"
-          color="primary"
-          variant="solid"
-        >
-          {{ currentPhase.name }}
-        </UBadge>
-        <UBadge
-          v-if="planStore.lastUpdated"
-          color="neutral"
-          variant="outline"
-        >
-          Updated {{ new Date(planStore.lastUpdated).toLocaleDateString() }}
-        </UBadge>
       </div>
     </header>
 
@@ -415,7 +401,8 @@ const workoutDuration = (workout: WorkoutItem) => {
             :key="phase.id"
             size="xs"
             :color="phase.id === selectedPhaseId ? 'primary' : 'neutral'"
-            variant="soft"
+            :variant="phase.id === selectedPhaseId ? 'outline' : 'ghost'"
+            :class="phase.id === selectedPhaseId ? 'border-2 font-semibold' : 'font-normal'"
             @click="selectedPhaseId = phase.id"
           >
             {{ phase.name }}
@@ -426,17 +413,23 @@ const workoutDuration = (workout: WorkoutItem) => {
         <p class="text-xs uppercase tracking-wide text-muted">
           Week
         </p>
-        <div class="flex flex-wrap gap-2">
-          <UButton
-            v-for="week in weeks"
-            :key="week.week"
-            size="xs"
-            :color="week.week === selectedWeek ? 'primary' : 'neutral'"
-            variant="ghost"
-            @click="selectedWeek = week.week"
-          >
-            Week {{ week.week }}
-          </UButton>
+        <div class="flex flex-wrap items-center gap-0">
+          <template v-for="(week, idx) in weeks" :key="week.week">
+            <button
+              type="button"
+              class="flex items-center justify-center rounded-full border transition-all"
+              :class="week.week === selectedWeek ? 'h-8 w-8 border-2 border-primary font-semibold text-primary text-xs' : 'h-4 w-4 border-muted/60 bg-muted/40'"
+              :aria-label="`Week ${week.week}`"
+              @click="selectedWeek = week.week"
+            >
+              <span v-if="week.week === selectedWeek">{{ week.week }}</span>
+            </button>
+            <span
+              v-if="idx < weeks.length - 1"
+              class="mx-1 h-px w-8 bg-muted/60"
+            >
+            </span>
+          </template>
         </div>
       </div>
     </div>
