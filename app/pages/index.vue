@@ -638,15 +638,6 @@ const workoutDuration = (workout: WorkoutItem) => {
                 })()
               }}
             </span>
-            <UButton
-              size="xs"
-              :color="progressStore.isCompleted(currentPhase?.id || '', weekData?.week || 0, workout.id) ? 'primary' : 'neutral'"
-              variant="soft"
-              @click="() => { progressStore.toggleCompletion(currentPhase?.id || '', weekData?.week || 0, workout.id); advanceIfCompleted() }"
-            >
-              <span v-if="progressStore.isCompleted(currentPhase?.id || '', weekData?.week || 0, workout.id)">Completed</span>
-              <span v-else>Mark done</span>
-            </UButton>
           </div>
         </div>
 
