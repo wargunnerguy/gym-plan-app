@@ -245,6 +245,7 @@ const isActiveExercise = (workout: WorkoutItem, exerciseId: string) => {
 }
 
 const openExercises = ref<Record<string, boolean>>({})
+const stickyExerciseRef = ref<{ workoutId: string, exerciseId: string } | null>(null)
 const detailKey = (workoutId: string, exerciseId: string) => `${workoutId}:${exerciseId}`
 
 const isDetailsOpen = (workout: WorkoutItem, exerciseId: string) => {
@@ -256,18 +257,75 @@ const isDetailsOpen = (workout: WorkoutItem, exerciseId: string) => {
 const toggleDetails = (workout: WorkoutItem, exerciseId: string) => {
   if (isActiveExercise(workout, exerciseId)) return
   const key = detailKey(workout.id, exerciseId)
-  openExercises.value[key] = !openExercises.value[key]
+  const nextState = !openExercises.value[key]
+  openExercises.value[key] = nextState
+  if (nextState && !isExerciseDone(workout.id, exerciseId)) {
+    stickyExerciseRef.value = { workoutId: workout.id, exerciseId }
+  }
 }
 
 const setOpenForExercise = (workoutId: string, exerciseId: string, open: boolean) => {
   openExercises.value[detailKey(workoutId, exerciseId)] = open
+  if (open && !isExerciseDone(workoutId, exerciseId)) {
+    stickyExerciseRef.value = { workoutId, exerciseId }
+  }
 }
 
 const openNextActive = (workout: WorkoutItem) => {
   const nextId = activeExerciseId(workout)
   if (nextId) {
     setOpenForExercise(workout.id, nextId, true)
+    stickyExerciseRef.value = { workoutId: workout.id, exerciseId: nextId }
   }
+}
+
+const handleExerciseToggle = (workout: WorkoutItem, exerciseId: string) => {
+  const phaseId = currentPhase.value?.id
+  const week = weekData.value?.week
+  if (!phaseId || !week) return
+  progressStore.toggleExercise(phaseId, week, workout.id, exerciseId)
+  setOpenForExercise(workout.id, exerciseId, false)
+  openNextActive(workout)
+}
+
+const stickyTarget = computed(() => {
+  const workout = currentWorkout.value
+  const phaseId = currentPhase.value?.id
+  const week = weekData.value?.week
+  if (!phaseId || !week || !workout) return null
+
+  const preferred = stickyExerciseRef.value?.workoutId === workout.id
+    ? workout.exercises.find(ex => ex.id === stickyExerciseRef.value?.exerciseId)
+    : null
+
+  const activeId = activeExerciseId(workout)
+  const fallback = activeId ? workout.exercises.find(ex => ex.id === activeId) : null
+  const candidate = preferred && !isExerciseDone(workout.id, preferred.id) ? preferred : fallback
+  if (!candidate || isExerciseDone(workout.id, candidate.id)) return null
+
+  return {
+    workoutId: workout.id,
+    exercise: candidate
+  }
+})
+
+watch(
+  () => [currentWorkout.value?.id, selectedWeek.value, selectedPhaseId.value],
+  () => {
+    const workout = currentWorkout.value
+    if (!workout) {
+      stickyExerciseRef.value = null
+      return
+    }
+    const nextId = activeExerciseId(workout)
+    stickyExerciseRef.value = nextId ? { workoutId: workout.id, exerciseId: nextId } : null
+  },
+  { immediate: true }
+)
+
+const markStickyDone = () => {
+  if (!stickyTarget.value || !currentWorkout.value) return
+  handleExerciseToggle(currentWorkout.value, stickyTarget.value.exercise.id)
 }
 
 const toNumber = (input: string) => {
@@ -310,7 +368,10 @@ const workoutDuration = (workout: WorkoutItem) => {
 </script>
 
 <template>
-  <UContainer class="space-y-6 py-6">
+  <UContainer
+    class="space-y-6 py-6"
+    :class="{ 'pb-24': Boolean(stickyTarget) }"
+  >
     <header class="space-y-2">
       <p class="text-sm uppercase tracking-wide text-muted">
         Plan
@@ -505,7 +566,7 @@ const workoutDuration = (workout: WorkoutItem) => {
                     variant="ghost"
                     :color="isExerciseDone(workout.id, exercise.id) ? 'primary' : 'neutral'"
                     icon="i-lucide-check-circle-2"
-                    @click="() => { progressStore.toggleExercise(currentPhase?.id || '', weekData?.week || 0, workout.id, exercise.id); setOpenForExercise(workout.id, exercise.id, false); openNextActive(workout) }"
+                    @click="handleExerciseToggle(workout, exercise.id)"
                   />
                 </UTooltip>
                 <span
@@ -637,6 +698,26 @@ const workoutDuration = (workout: WorkoutItem) => {
         >
           {{ upcomingWorkout.exercises.length }} exercises
         </UBadge>
+      </div>
+    </div>
+
+    <div
+      v-if="stickyTarget"
+      class="pointer-events-none fixed inset-x-0 bottom-0 px-4 pb-5"
+    >
+      <div class="pointer-events-auto mx-auto max-w-3xl">
+        <div class="rounded-2xl border border-muted/40 bg-white/90 shadow-lg backdrop-blur dark:bg-gray-900/90">
+          <UButton
+            block
+            size="lg"
+            color="primary"
+            class="h-14 text-base"
+            icon="i-lucide-check-circle-2"
+            @click="markStickyDone"
+          >
+            Mark {{ stickyTarget.exercise.name }} done
+          </UButton>
+        </div>
       </div>
     </div>
   </UContainer>
