@@ -691,7 +691,7 @@ const workoutDuration = (workout: WorkoutItem) => {
               </p>
               <div class="overflow-hidden rounded-lg bg-muted/5">
                 <div
-                  v-if="exercise.warmupSets"
+                  v-if="exercise.warmupSets && toNumber(exercise.warmupSets) > 0"
                   class="flex items-center justify-between px-3 py-2 bg-primary/5 cursor-pointer"
                   :class="[
                     setBorderClass(isWarmupCompleted(workout.id, exercise.id)),
