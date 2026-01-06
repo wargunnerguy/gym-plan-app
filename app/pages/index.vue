@@ -455,6 +455,13 @@ const settingsWeekOptions = computed(() =>
   settingsWeeks.value.map(week => ({ label: `Week ${week.week}`, value: week.week }))
 )
 
+watch(settingsPhase, (phaseId) => {
+  const phase = phases.value.find(p => p.id === phaseId)
+  if (phase) {
+    settingsWeek.value = phase.weeks[0]?.week ?? null
+  }
+})
+
 const applySettings = () => {
   if (settingsPhase.value) {
     selectedPhaseId.value = settingsPhase.value
@@ -915,21 +922,35 @@ const workoutDuration = (workout: WorkoutItem) => {
           <label class="text-xs uppercase tracking-wide text-muted">
             Phase
           </label>
-          <USelect
+          <select
             v-model="settingsPhase"
-            :options="settingsPhaseOptions"
-          />
+            class="w-full rounded-md border border-muted/60 bg-white px-2 py-1 text-sm dark:bg-gray-900"
+          >
+            <option
+              v-for="phase in settingsPhaseOptions"
+              :key="phase.value"
+              :value="phase.value"
+            >
+              {{ phase.label }}
+            </option>
+          </select>
         </div>
         <div class="space-y-2">
           <label class="text-xs uppercase tracking-wide text-muted">
             Week
           </label>
-          <USelect
-            v-model="settingsWeek"
-            :options="settingsWeekOptions"
-            value-attribute="value"
-            option-attribute="label"
-          />
+          <select
+            v-model.number="settingsWeek"
+            class="w-full rounded-md border border-muted/60 bg-white px-2 py-1 text-sm dark:bg-gray-900"
+          >
+            <option
+              v-for="week in settingsWeekOptions"
+              :key="week.value"
+              :value="week.value"
+            >
+              {{ week.label }}
+            </option>
+          </select>
         </div>
         <div class="flex justify-end gap-2">
           <UButton

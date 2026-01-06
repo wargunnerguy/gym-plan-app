@@ -47,6 +47,7 @@ onMounted(() => {
       <template #right>
         <UButton
           size="sm"
+          color="neutral"
           variant="ghost"
           icon="i-lucide-settings"
           @click="settingsOpen = true"
