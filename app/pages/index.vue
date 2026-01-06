@@ -764,7 +764,7 @@ const workoutDuration = (workout: WorkoutItem) => {
                 {{ exercise.group }}
               </UBadge>
               <div
-                v-if="exercise.subs?.length"
+                v-if="exercise.subs && exercise.subs.length"
                 class="flex flex-wrap gap-2 pt-1"
               >
                 <div
