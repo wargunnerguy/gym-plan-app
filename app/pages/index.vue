@@ -407,6 +407,13 @@ const toNumber = (input: string) => {
   return match ? Number(match[1]) : 0
 }
 
+const cleanSubs = (subs?: { name: string, link?: string }[]) => {
+  return (subs || []).filter(sub => {
+    const name = (sub?.name || '').trim().toLowerCase()
+    return name && name !== 'n/a'
+  })
+}
+
 const parseRestRange = (rest: string) => {
   const matches = String(rest || '').match(/(\d+(\.\d+)?)/g)
   if (!matches || !matches.length) return { min: 0, max: 0 }
@@ -764,11 +771,11 @@ const workoutDuration = (workout: WorkoutItem) => {
                 {{ exercise.group }}
               </UBadge>
               <div
-                v-if="exercise.subs && exercise.subs.length"
+                v-if="cleanSubs(exercise.subs).length"
                 class="flex flex-wrap gap-2 pt-1"
               >
                 <div
-                  v-for="(sub, idx) in exercise.subs"
+                  v-for="(sub, idx) in cleanSubs(exercise.subs)"
                   :key="idx"
                   class="flex items-center gap-1"
                 >
