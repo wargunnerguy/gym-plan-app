@@ -674,7 +674,10 @@ const workoutDuration = (workout: WorkoutItem) => {
                 >
                   {{ exercise.name }}
                 </a>
-                <span class="text-xs text-muted">
+                <span
+                  v-if="isDetailsOpen(workout, exercise.id)"
+                  class="text-xs text-muted"
+                >
                   <template v-if="isLinkedBelow(workout, idx)">
                     No rest to next
                   </template>
