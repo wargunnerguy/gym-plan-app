@@ -592,12 +592,6 @@ const workoutDuration = (workout: WorkoutItem) => {
             <h2 class="text-xl font-semibold">
               {{ workout.dayName }}
             </h2>
-            <UBadge
-              color="primary"
-              variant="soft"
-            >
-              {{ workout.focus }}
-            </UBadge>
           </div>
           <div class="flex items-center gap-2">
             <span class="text-xs text-muted">
