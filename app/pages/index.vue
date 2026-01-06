@@ -341,9 +341,14 @@ const stickyTarget = computed(() => {
   const candidate = preferred && !isExerciseDone(workout, preferred) ? preferred : fallback
   if (!candidate || isExerciseDone(workout, candidate)) return null
 
+  const stage = candidate.warmupSets && !isWarmupCompleted(workout.id, candidate.id)
+    ? 'warmup'
+    : 'main'
+
   return {
     workoutId: workout.id,
-    exercise: candidate
+    exercise: candidate,
+    stage
   }
 })
 
@@ -363,8 +368,8 @@ watch(
 
 const markStickyDone = () => {
   if (!stickyTarget.value || !currentWorkout.value) return
-  const exercise = stickyTarget.value.exercise
-  if (exercise.warmupSets && !isWarmupCompleted(currentWorkout.value.id, exercise.id)) {
+  const { exercise, stage } = stickyTarget.value
+  if (stage === 'warmup') {
     handleWarmupToggle(currentWorkout.value, exercise.id)
   } else {
     handleExerciseToggle(currentWorkout.value, exercise.id)
@@ -602,13 +607,6 @@ const workoutDuration = (workout: WorkoutItem) => {
                 })()
               }}
             </span>
-            <UBadge
-              v-if="workout.exercises.length"
-              color="neutral"
-              variant="outline"
-            >
-              {{ workout.exercises.length }} exercises
-            </UBadge>
             <UButton
               size="xs"
               :color="progressStore.isCompleted(currentPhase?.id || '', weekData?.week || 0, workout.id) ? 'primary' : 'neutral'"
@@ -802,12 +800,6 @@ const workoutDuration = (workout: WorkoutItem) => {
       <div class="flex flex-wrap items-center gap-2">
         <span class="text-lg font-semibold">{{ upcomingWorkout.dayName }}</span>
         <UBadge
-          color="primary"
-          variant="solid"
-        >
-          {{ upcomingWorkout.focus }}
-        </UBadge>
-        <UBadge
           color="neutral"
           variant="soft"
         >
@@ -825,12 +817,17 @@ const workoutDuration = (workout: WorkoutItem) => {
           <UButton
             block
             size="lg"
-            color="primary"
+            :color="stickyTarget.stage === 'warmup' ? 'warning' : 'primary'"
             class="h-14 text-base"
-            icon="i-lucide-check-circle-2"
+            icon="i-heroicons-check-circle"
             @click="markStickyDone"
           >
-            Mark {{ stickyTarget.exercise.name }} done
+            <template v-if="stickyTarget.stage === 'warmup'">
+              Mark warm-up for {{ stickyTarget.exercise.name }} done
+            </template>
+            <template v-else>
+              Mark {{ stickyTarget.exercise.name }} done
+            </template>
           </UButton>
         </div>
       </div>
