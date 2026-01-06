@@ -4,5 +4,6 @@ export default defineAppConfig({
       primary: 'green',
       neutral: 'slate'
     }
-  }
+  },
+  appVersion: process.env.npm_package_version || ''
 })

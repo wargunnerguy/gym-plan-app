@@ -24,6 +24,9 @@ type WorkoutItem = {
   exercises: ExerciseItem[]
 }
 
+const appConfig = useAppConfig()
+const appVersion = computed(() => appConfig?.appVersion || '')
+
 const currentPlan = computed(() => planStore.activePlan)
 
 const phaseOptions = computed(() =>
@@ -225,18 +228,31 @@ const advanceIfCompleted = () => {
   }
 }
 
-const isExerciseDone = (workoutId: string, exerciseId: string) => {
+const isMainCompleted = (workoutId: string, exerciseId: string) => {
   const phaseId = currentPhase.value?.id
   const week = weekData.value?.week
   if (!phaseId || !week) return false
   return progressStore.isExerciseCompleted(phaseId, week, workoutId, exerciseId)
 }
 
+const isWarmupCompleted = (workoutId: string, exerciseId: string) => {
+  const phaseId = currentPhase.value?.id
+  const week = weekData.value?.week
+  if (!phaseId || !week) return false
+  return progressStore.isWarmupCompleted(phaseId, week, workoutId, exerciseId)
+}
+
+const isExerciseDone = (workout: WorkoutItem, exercise: ExerciseItem) => {
+  const mainDone = isMainCompleted(workout.id, exercise.id)
+  const warmDone = exercise.warmupSets ? isWarmupCompleted(workout.id, exercise.id) : true
+  return mainDone && warmDone
+}
+
 const activeExerciseId = (workout: WorkoutItem) => {
   const phaseId = currentPhase.value?.id
   const week = weekData.value?.week
   if (!phaseId || !week) return null
-  const firstIncomplete = workout.exercises.find(ex => !progressStore.isExerciseCompleted(phaseId, week, workout.id, ex.id))
+  const firstIncomplete = workout.exercises.find(ex => !isExerciseDone(workout, ex))
   return firstIncomplete?.id || null
 }
 
@@ -249,24 +265,30 @@ const stickyExerciseRef = ref<{ workoutId: string, exerciseId: string } | null>(
 const detailKey = (workoutId: string, exerciseId: string) => `${workoutId}:${exerciseId}`
 
 const isDetailsOpen = (workout: WorkoutItem, exerciseId: string) => {
-  if (isExerciseDone(workout.id, exerciseId)) return false
+  const exercise = workout.exercises.find(ex => ex.id === exerciseId)
+  if (exercise && isExerciseDone(workout, exercise)) return false
+  const key = detailKey(workout.id, exerciseId)
+  const explicit = openExercises.value[key]
+  if (typeof explicit === 'boolean') return explicit
   if (isActiveExercise(workout, exerciseId)) return true
-  return Boolean(openExercises.value[detailKey(workout.id, exerciseId)])
+  return false
 }
 
 const toggleDetails = (workout: WorkoutItem, exerciseId: string) => {
-  if (isActiveExercise(workout, exerciseId)) return
+  const exercise = workout.exercises.find(ex => ex.id === exerciseId)
   const key = detailKey(workout.id, exerciseId)
   const nextState = !openExercises.value[key]
   openExercises.value[key] = nextState
-  if (nextState && !isExerciseDone(workout.id, exerciseId)) {
+  if (nextState && exercise && !isExerciseDone(workout, exercise)) {
     stickyExerciseRef.value = { workoutId: workout.id, exerciseId }
   }
 }
 
 const setOpenForExercise = (workoutId: string, exerciseId: string, open: boolean) => {
   openExercises.value[detailKey(workoutId, exerciseId)] = open
-  if (open && !isExerciseDone(workoutId, exerciseId)) {
+  const workout = currentWorkout.value
+  const exercise = workout?.exercises.find(ex => ex.id === exerciseId)
+  if (open && workout && exercise && !isExerciseDone(workout, exercise)) {
     stickyExerciseRef.value = { workoutId, exerciseId }
   }
 }
@@ -288,6 +310,22 @@ const handleExerciseToggle = (workout: WorkoutItem, exerciseId: string) => {
   openNextActive(workout)
 }
 
+const handleWarmupToggle = (workout: WorkoutItem, exerciseId: string) => {
+  const phaseId = currentPhase.value?.id
+  const week = weekData.value?.week
+  if (!phaseId || !week) return
+  progressStore.toggleWarmup(phaseId, week, workout.id, exerciseId)
+}
+
+const completionPatternStyle = {
+  backgroundImage: 'repeating-linear-gradient(135deg, rgba(0,0,0,0.18) 0, rgba(0,0,0,0.18) 6px, transparent 6px, transparent 12px)',
+  backgroundSize: '10px 10px'
+}
+
+const rowCompletionStyle = (done: boolean) => done ? completionPatternStyle : {}
+
+const setBorderClass = (done: boolean) => done ? 'border-2 border-solid border-l-4 border-muted' : 'border-2 border-dashed border-muted/60'
+
 const stickyTarget = computed(() => {
   const workout = currentWorkout.value
   const phaseId = currentPhase.value?.id
@@ -300,8 +338,8 @@ const stickyTarget = computed(() => {
 
   const activeId = activeExerciseId(workout)
   const fallback = activeId ? workout.exercises.find(ex => ex.id === activeId) : null
-  const candidate = preferred && !isExerciseDone(workout.id, preferred.id) ? preferred : fallback
-  if (!candidate || isExerciseDone(workout.id, candidate.id)) return null
+  const candidate = preferred && !isExerciseDone(workout, preferred) ? preferred : fallback
+  if (!candidate || isExerciseDone(workout, candidate)) return null
 
   return {
     workoutId: workout.id,
@@ -325,7 +363,30 @@ watch(
 
 const markStickyDone = () => {
   if (!stickyTarget.value || !currentWorkout.value) return
-  handleExerciseToggle(currentWorkout.value, stickyTarget.value.exercise.id)
+  const exercise = stickyTarget.value.exercise
+  if (exercise.warmupSets && !isWarmupCompleted(currentWorkout.value.id, exercise.id)) {
+    handleWarmupToggle(currentWorkout.value, exercise.id)
+  } else {
+    handleExerciseToggle(currentWorkout.value, exercise.id)
+  }
+}
+
+const workoutCompletionParts = (workout: WorkoutItem) => {
+  const phaseId = currentPhase.value?.id
+  const week = weekData.value?.week
+  let total = 0
+  let completed = 0
+
+  workout.exercises.forEach(exercise => {
+    const hasWarmup = Boolean(exercise.warmupSets)
+    total += hasWarmup ? 2 : 1
+    if (phaseId && week) {
+      if (hasWarmup && isWarmupCompleted(workout.id, exercise.id)) completed += 1
+      if (isMainCompleted(workout.id, exercise.id)) completed += 1
+    }
+  })
+
+  return { completed, total: total || 1 }
 }
 
 const toNumber = (input: string) => {
@@ -350,20 +411,32 @@ const exerciseDuration = (exercise: ExerciseItem) => {
   const restRange = parseRestRange(exercise.rest)
   const restMinSec = restRange.min * 60
   const restMaxSec = restRange.max * 60
-  const workPerSetSec = 40 // heuristic
-  const totalMin = sets * workPerSetSec + Math.max(0, sets - 1) * restMinSec
-  const totalMax = sets * workPerSetSec + Math.max(0, sets - 1) * restMaxSec
+  const workPerSetSec = 90 // heuristic: average set effort
+  const setupPerSetSec = 20 // transition/setup buffer per set
+  const totalMin = sets * (workPerSetSec + setupPerSetSec) + Math.max(0, sets - 1) * restMinSec
+  const totalMax = sets * (workPerSetSec + setupPerSetSec) + Math.max(0, sets - 1) * restMaxSec
   return {
-    min: Math.round(totalMin / 60),
-    max: Math.round(totalMax / 60)
+    minSets: totalMin / 60,
+    maxSets: totalMax / 60,
+    restAfterMin: restRange.min,
+    restAfterMax: restRange.max
   }
 }
 
 const workoutDuration = (workout: WorkoutItem) => {
   const totals = workout.exercises.map((ex: ExerciseItem) => exerciseDuration(ex))
-  const min = totals.reduce((sum: number, t) => sum + t.min, 0)
-  const max = totals.reduce((sum: number, t) => sum + t.max, 0)
-  return { min, max }
+  const minRaw = totals.reduce((sum: number, t, idx) => {
+    const restAfter = idx < totals.length - 1 ? t.restAfterMin : 0
+    return sum + t.minSets + restAfter
+  }, 0)
+  const maxRaw = totals.reduce((sum: number, t, idx) => {
+    const restAfter = idx < totals.length - 1 ? t.restAfterMax : 0
+    return sum + t.maxSets + restAfter
+  }, 0)
+  return {
+    min: Math.ceil(minRaw),
+    max: Math.ceil(maxRaw)
+  }
 }
 </script>
 
@@ -380,6 +453,12 @@ const workoutDuration = (workout: WorkoutItem) => {
         <h1 class="text-3xl font-semibold">
           {{ currentPlan?.name || 'Loading plan' }}
         </h1>
+        <span
+          v-if="appVersion"
+          class="text-sm font-semibold text-muted"
+        >
+          v{{ appVersion }}
+        </span>
       </div>
     </header>
 
@@ -489,15 +568,19 @@ const workoutDuration = (workout: WorkoutItem) => {
           <div class="flex-1 h-1.5 rounded-full bg-muted/40 overflow-hidden">
             <div
               class="h-full rounded-full bg-primary/70 transition-all"
-              :style="{ width: `${Math.round((workout.exercises.filter(ex => progressStore.isExerciseCompleted(currentPhase?.id || '', weekData?.week || 0, workout.id, ex.id)).length / workout.exercises.length) * 100)}%` }"
+              :style="(() => {
+                const p = workoutCompletionParts(workout)
+                return { width: `${Math.round((p.completed / p.total) * 100)}%` }
+              })()"
             />
           </div>
           <span class="text-xs text-muted">
             {{
-              workout.exercises.filter(ex =>
-                progressStore.isExerciseCompleted(currentPhase?.id || '', weekData?.week || 0, workout.id, ex.id)
-              ).length
-            }}/{{ workout.exercises.length }} done
+              (() => {
+                const p = workoutCompletionParts(workout)
+                return `${p.completed}/${p.total} done`
+              })()
+            }}
           </span>
         </div>
 
@@ -549,23 +632,25 @@ const workoutDuration = (workout: WorkoutItem) => {
             v-for="exercise in workout.exercises"
             :key="exercise.id"
             class="rounded-lg border border-muted/50 bg-muted/5 px-3 py-2 transition-all"
-            :class="isExerciseDone(workout.id, exercise.id) ? 'opacity-60 line-through border-primary/40 bg-primary/5' : ''"
+            :class="isExerciseDone(workout, exercise) ? 'opacity-60 line-through border-primary/40 bg-primary/5' : ''"
           >
-            <div class="flex flex-wrap items-center gap-2 justify-between">
-              <div class="flex flex-wrap items-center gap-2">
-                <UTooltip :text="isExerciseDone(workout.id, exercise.id) ? 'Completed' : 'Mark done'">
+            <div class="flex flex-wrap items-start gap-2">
+              <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                <UTooltip :text="isExerciseDone(workout, exercise) ? 'Completed' : 'Mark done'">
                   <UButton
                     size="2xs"
                     variant="ghost"
-                    :color="isExerciseDone(workout.id, exercise.id) ? 'primary' : 'neutral'"
-                    icon="i-lucide-check-circle-2"
+                    :color="isExerciseDone(workout, exercise) ? 'primary' : 'neutral'"
+                    :icon="isExerciseDone(workout, exercise) ? 'i-heroicons-check-circle-20-solid' : 'i-heroicons-check-circle'"
                     @click="handleExerciseToggle(workout, exercise.id)"
                   />
                 </UTooltip>
                 <span
                   v-if="!exercise.link"
                   class="text-sm font-medium"
-                >{{ exercise.name }}</span>
+                >
+                  {{ exercise.name }}
+                </span>
                 <a
                   v-else
                   class="text-sm font-medium text-primary underline-offset-4 hover:underline"
@@ -575,28 +660,9 @@ const workoutDuration = (workout: WorkoutItem) => {
                 >
                   {{ exercise.name }}
                 </a>
-                <template v-if="!isExerciseDone(workout.id, exercise.id)">
-                  <UBadge
-                    color="neutral"
-                    variant="soft"
-                  >
-                    {{ exercise.reps }} reps
-                  </UBadge>
-                  <UBadge
-                    color="neutral"
-                    variant="soft"
-                  >
-                    {{ exercise.workingSets }} sets
-                  </UBadge>
-                <UBadge
-                  v-if="exercise.warmupSets"
-                  color="neutral"
-                  variant="outline"
-                  class="opacity-70"
-                >
-                  {{ exercise.warmupSets }} warm-up
-                </UBadge>
-                </template>
+                <span class="text-xs text-muted">
+                  Rest {{ exercise.rest }}
+                </span>
               </div>
               <div class="flex items-center gap-2">
                 <UBadge
@@ -609,7 +675,7 @@ const workoutDuration = (workout: WorkoutItem) => {
                   {{
                     (() => {
                       const d = exerciseDuration(exercise)
-                      return `${d.max}m`
+                      return `${Math.ceil(d.maxSets + d.restAfterMax)}m`
                     })()
                   }}
                 </span>
@@ -621,7 +687,75 @@ const workoutDuration = (workout: WorkoutItem) => {
                 />
               </div>
             </div>
-            <template v-if="!isExerciseDone(workout.id, exercise.id) && isDetailsOpen(workout, exercise.id)">
+            <p
+              v-if="exercise.notes"
+              class="text-xs text-muted mt-1"
+            >
+              {{ exercise.notes }}
+            </p>
+            <div
+              v-if="isDetailsOpen(workout, exercise.id)"
+              class="mt-2"
+            >
+              <div class="overflow-hidden rounded-lg bg-muted/5">
+                <div
+                  v-if="exercise.warmupSets"
+                  class="flex items-center justify-between px-3 py-2 bg-primary/5 cursor-pointer"
+                  :class="[
+                    setBorderClass(isWarmupCompleted(workout.id, exercise.id)),
+                    isWarmupCompleted(workout.id, exercise.id)
+                      ? 'border-b-2 border-solid border-muted'
+                      : 'border-b-2 border-dashed border-muted/60'
+                  ]"
+                  :style="rowCompletionStyle(isWarmupCompleted(workout.id, exercise.id))"
+                  @click="handleWarmupToggle(workout, exercise.id)"
+                >
+                  <div class="space-y-1">
+                    <p class="text-xs uppercase tracking-wide text-primary">
+                      Warm-up
+                    </p>
+                    <p class="text-sm text-primary/80">
+                      {{ exercise.warmupSets }} sets · {{ exercise.reps }} reps
+                    </p>
+                  </div>
+                  <div
+                    class="pointer-events-none flex h-8 w-8 items-center justify-center rounded-full border-2 transition"
+                    :class="isWarmupCompleted(workout.id, exercise.id) ? 'bg-primary text-white border-primary' : 'bg-transparent text-muted border-muted/60'"
+                    aria-hidden="true"
+                  >
+                    <span class="text-base leading-none">✓</span>
+                  </div>
+                </div>
+                <div
+                  class="flex items-center justify-between px-3 py-3 bg-white/60 dark:bg-gray-900/40 cursor-pointer"
+                  :class="[
+                    setBorderClass(isMainCompleted(workout.id, exercise.id)),
+                    isMainCompleted(workout.id, exercise.id)
+                      ? 'border-t-2 border-solid border-muted'
+                      : 'border-t-2 border-dashed border-muted/60'
+                  ]"
+                  :style="rowCompletionStyle(isMainCompleted(workout.id, exercise.id))"
+                  @click="handleExerciseToggle(workout, exercise.id)"
+                >
+                  <div class="space-y-1">
+                    <p class="text-xs uppercase tracking-wide text-muted">
+                      Main sets
+                    </p>
+                    <p class="text-sm text-muted">
+                      {{ exercise.workingSets }} sets · {{ exercise.reps }} reps
+                    </p>
+                  </div>
+                  <div
+                    class="pointer-events-none flex h-8 w-8 items-center justify-center rounded-full border-2 transition"
+                    :class="isMainCompleted(workout.id, exercise.id) ? 'bg-primary text-white border-primary' : 'bg-transparent text-muted border-muted/60'"
+                    aria-hidden="true"
+                  >
+                    <span class="text-base leading-none">✓</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <template v-if="!isExerciseDone(workout, exercise) && isDetailsOpen(workout, exercise.id)">
               <UBadge
                 v-if="exercise.group"
                 color="primary"
@@ -629,9 +763,6 @@ const workoutDuration = (workout: WorkoutItem) => {
               >
                 {{ exercise.group }}
               </UBadge>
-              <p class="text-sm text-muted">
-                {{ exercise.notes }}
-              </p>
               <div
                 v-if="exercise.subs?.length"
                 class="flex flex-wrap gap-2 pt-1"
@@ -661,9 +792,6 @@ const workoutDuration = (workout: WorkoutItem) => {
                   </UBadge>
                 </div>
               </div>
-              <p class="text-xs text-muted">
-                Rest {{ exercise.rest }}
-              </p>
             </template>
           </div>
         </div>
