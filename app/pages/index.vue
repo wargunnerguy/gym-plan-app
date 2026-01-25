@@ -1,6 +1,8 @@
 <script setup lang="ts">
 const planStore = usePlanStore()
 const progressStore = useProgressStore()
+const viewStore = useViewStore()
+const weightsStore = useWeightsStore()
 
 type ExerciseItem = {
   id: string
@@ -53,6 +55,9 @@ const phaseHasRemaining = (phaseId: string) => {
 const pickInitialPhase = () => {
   if (!phases.value.length) {
     selectedPhaseId.value = null
+    return
+  }
+  if (selectedPhaseId.value && phases.value.some(p => p.id === selectedPhaseId.value)) {
     return
   }
   const firstWithWork = phases.value.find(p => phaseHasRemaining(p.id))
@@ -108,6 +113,9 @@ const pickInitialWeek = () => {
     selectedWeek.value = weeks[0].value
     return
   }
+  if (selectedWeek.value && currentPhase.value?.weeks.some(week => week.week === selectedWeek.value)) {
+    return
+  }
   const firstWithWorkLeft = currentPhase.value?.weeks.find(week =>
     week.workouts.some(w => !progressStore.isCompleted(phaseId, week.week, w.id))
   )
@@ -118,6 +126,44 @@ watch(
   () => [weekOptions.value, selectedPhaseId.value, planStore.plans.length],
   () => pickInitialWeek(),
   { immediate: true }
+)
+
+const appliedViewState = ref(false)
+
+const applyViewState = () => {
+  if (appliedViewState.value) return
+  if (!viewStore.hydrated) return
+  if (!phases.value.length) return
+  const storedPhaseId = viewStore.viewState.phaseId
+  if (storedPhaseId && phases.value.some(p => p.id === storedPhaseId)) {
+    selectedPhaseId.value = storedPhaseId
+  }
+  const phase = phases.value.find(p => p.id === (storedPhaseId ?? selectedPhaseId.value))
+  const storedWeek = viewStore.viewState.week
+  if (storedWeek && phase?.weeks.some(week => week.week === storedWeek)) {
+    selectedWeek.value = storedWeek
+  }
+  appliedViewState.value = true
+}
+
+watch(
+  () => [phases.value.length, viewStore.viewState.phaseId, viewStore.viewState.week],
+  () => applyViewState(),
+  { immediate: true }
+)
+
+watch(
+  () => selectedPhaseId.value,
+  (phaseId) => {
+    viewStore.update({ phaseId: phaseId ?? null })
+  }
+)
+
+watch(
+  () => selectedWeek.value,
+  (week) => {
+    viewStore.update({ week: week ?? null })
+  }
 )
 
 const weekData = computed(() =>
@@ -135,6 +181,13 @@ const todayKey = () => new Date().toISOString().slice(0, 10)
 const blockedForToday = computed(() => progressStore.lastWorkoutDate === todayKey())
 
 const currentWorkout = computed(() => nextWorkout.value)
+
+watch(
+  () => currentWorkout.value?.id,
+  (workoutId) => {
+    viewStore.update({ workoutId: workoutId ?? null })
+  }
+)
 
 const cycleOrder = ['Legs', 'Push', 'Pull', 'Rest', 'Full', 'Rest']
 
@@ -228,6 +281,7 @@ const advanceIfCompleted = () => {
   if (wrapped) {
     // Completed all phases/weeks: reset and clear progress
     progressStore.clear()
+    viewStore.clear()
     selectedPhaseId.value = ordered[0].id
     selectedWeek.value = ordered[0].weeks[0]?.week ?? null
     return
@@ -332,7 +386,15 @@ const handleExerciseToggle = (workout: WorkoutItem, exerciseId: string) => {
   const phaseId = currentPhase.value?.id
   const week = weekData.value?.week
   if (!phaseId || !week) return
+  const wasCompleted = progressStore.isExerciseCompleted(phaseId, week, workout.id, exerciseId)
   progressStore.toggleExercise(phaseId, week, workout.id, exerciseId)
+  if (!wasCompleted) {
+    const exercise = workout.exercises.find(ex => ex.id === exerciseId)
+    if (exercise && allowWeightEntryFor(exercise)) {
+      weightsStore.commitCurrentAsLast(weightKeyFor(phaseId, exercise))
+      weightsStore.clearCurrentWeight(weightKeyFor(phaseId, exercise))
+    }
+  }
   setOpenForExercise(workout.id, exerciseId, false)
   openNextActive(workout)
   syncWorkoutCompletion(workout)
@@ -387,6 +449,19 @@ const stickyTarget = computed(() => {
   }
 })
 
+const restoreExerciseFocus = () => {
+  const workout = currentWorkout.value
+  if (!workout) return
+  const storedWorkoutId = viewStore.viewState.workoutId
+  const storedExerciseId = viewStore.viewState.exerciseId
+  if (!storedWorkoutId || !storedExerciseId) return
+  if (storedWorkoutId !== workout.id) return
+  const exercise = workout.exercises.find(ex => ex.id === storedExerciseId)
+  if (!exercise || isExerciseDone(workout, exercise)) return
+  setOpenForExercise(workout.id, exercise.id, true)
+  stickyExerciseRef.value = { workoutId: workout.id, exerciseId: exercise.id }
+}
+
 watch(
   () => [currentWorkout.value?.id, selectedWeek.value, selectedPhaseId.value],
   () => {
@@ -395,9 +470,31 @@ watch(
       stickyExerciseRef.value = null
       return
     }
+    const storedExerciseId = viewStore.viewState.exerciseId
+    if (storedExerciseId) {
+      const exercise = workout.exercises.find(ex => ex.id === storedExerciseId)
+      if (exercise && !isExerciseDone(workout, exercise)) {
+        setOpenForExercise(workout.id, exercise.id, true)
+        stickyExerciseRef.value = { workoutId: workout.id, exerciseId: exercise.id }
+        return
+      }
+    }
     const nextId = activeExerciseId(workout)
     stickyExerciseRef.value = nextId ? { workoutId: workout.id, exerciseId: nextId } : null
   },
+  { immediate: true }
+)
+
+watch(
+  () => stickyExerciseRef.value?.exerciseId,
+  (exerciseId) => {
+    viewStore.update({ exerciseId: exerciseId ?? null })
+  }
+)
+
+watch(
+  () => [currentWorkout.value?.id, viewStore.viewState.exerciseId],
+  () => restoreExerciseFocus(),
   { immediate: true }
 )
 
@@ -453,6 +550,174 @@ const syncWorkoutCompletion = (workout: WorkoutItem) => {
 const toNumber = (input: string) => {
   const match = String(input || '').match(/(\d+(\.\d+)?)/)
   return match ? Number(match[1]) : 0
+}
+
+const parseRepRange = (input: string) => {
+  const matches = String(input || '').match(/(\d+(\.\d+)?)/g)
+  if (!matches || !matches.length) return { min: 0, max: 0 }
+  if (matches.length === 1) {
+    const val = Number(matches[0])
+    return { min: val, max: val }
+  }
+  return { min: Number(matches[0]), max: Number(matches[1]) }
+}
+
+const normalizeKey = (input: string) =>
+  String(input || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+
+const isFeederSet = (exercise: ExerciseItem) =>
+  /feeder\s*sets?/i.test(exercise.name || '')
+
+const isTimeBased = (exercise: ExerciseItem) =>
+  /(\d+)\s*(s|sec|secs|seconds)\b/i.test(exercise.reps || '') || /hold/i.test(exercise.reps || '')
+
+const isBodyweightAmrap = (exercise: ExerciseItem) => {
+  if (!/amrap/i.test(exercise.reps || '')) return false
+  return /(push\s*-?\s*up|pull\s*-?\s*up|chin\s*-?\s*up|dip)/i.test(exercise.name || '')
+}
+
+const allowWeightEntryFor = (exercise: ExerciseItem) => {
+  if (isFeederSet(exercise)) return false
+  if (isTimeBased(exercise)) return false
+  if (isBodyweightAmrap(exercise)) return false
+  return true
+}
+
+const weightKeyFor = (phaseId: string, exercise: ExerciseItem) =>
+  `${phaseId}:${normalizeKey(exercise.name)}:${normalizeKey(exercise.reps)}:${normalizeKey(exercise.workingSets)}`
+
+const lastWeightFor = (exercise: ExerciseItem) => {
+  if (!allowWeightEntryFor(exercise)) return null
+  const phaseId = currentPhase.value?.id
+  if (!phaseId) return null
+  return weightsStore.getLastWeight(weightKeyFor(phaseId, exercise))
+}
+
+const currentWeightFor = (exercise: ExerciseItem) => {
+  if (!allowWeightEntryFor(exercise)) return null
+  const phaseId = currentPhase.value?.id
+  if (!phaseId) return null
+  return weightsStore.getCurrentWeight(weightKeyFor(phaseId, exercise))
+}
+
+const warmupBaseWeightFor = (exercise: ExerciseItem) => {
+  if (!allowWeightEntryFor(exercise)) return null
+  const phaseId = currentPhase.value?.id
+  if (!phaseId) return null
+  return weightsStore.getWarmupBaseWeight(weightKeyFor(phaseId, exercise))
+}
+
+const formatWeight = (value: number) => {
+  const rounded = Math.round(value * 2) / 2
+  return Number.isInteger(rounded) ? `${rounded}` : rounded.toFixed(1)
+}
+
+const workingWeightDisplayFor = (exercise: ExerciseItem) => {
+  const weight = currentWeightFor(exercise)
+  return weight === null ? '' : formatWeight(weight)
+}
+
+const workingWeightPlaceholderFor = (exercise: ExerciseItem) => {
+  const weight = lastWeightFor(exercise)
+  return weight ? `${formatWeight(weight)} kg` : 'No previous weight'
+}
+
+const updateWorkingWeight = (exercise: ExerciseItem, value: string | number) => {
+  const phaseId = currentPhase.value?.id
+  if (!phaseId) return
+  const raw = typeof value === 'number' ? value : Number(String(value || '').replace(',', '.'))
+  if (!Number.isFinite(raw) || raw <= 0) {
+    weightsStore.clearCurrentWeight(weightKeyFor(phaseId, exercise))
+    return
+  }
+  weightsStore.setCurrentWeight(weightKeyFor(phaseId, exercise), raw)
+}
+
+const currentPhaseNumber = computed(() => {
+  const phase = currentPhase.value
+  if (!phase) return null
+  const orderValue = Number(phase.order)
+  if (Number.isFinite(orderValue) && orderValue > 0) return orderValue
+  const idx = orderedPhases.value.findIndex(p => p.id === phase.id)
+  return idx >= 0 ? idx + 1 : null
+})
+
+const warmupPlanFor = (exercise: ExerciseItem) => {
+  const warmupSets = Math.round(toNumber(exercise.warmupSets))
+  if (!warmupSets) return []
+  if (!allowWeightEntryFor(exercise)) return []
+  const phaseNumber = currentPhaseNumber.value
+  const reps = parseRepRange(exercise.reps)
+  const isPhase3HighReps = phaseNumber === 3 && reps.max >= 15
+
+  if (isPhase3HighReps) {
+    if (warmupSets <= 1) {
+      return [{ percentRange: [0.5, 0.7], reps: '5-10 reps' }]
+    }
+    return [
+      { percent: 0.5, reps: '5-10 reps' },
+      { percent: 0.7, reps: '5-10 reps' }
+    ]
+  }
+
+  if (warmupSets === 1) {
+    return [{ percent: 0.6, reps: 'same reps' }]
+  }
+  if (warmupSets === 2) {
+    return [
+      { percent: 0.5, reps: 'same reps' },
+      { percent: 0.7, reps: 'few less reps' }
+    ]
+  }
+  return [
+    { percent: 0.45, reps: 'same reps' },
+    { percent: 0.65, reps: 'few less reps' },
+    { percent: 0.85, reps: 'few less reps' }
+  ]
+}
+
+const warmupSummaryFor = (exercise: ExerciseItem) => {
+  const baseWeight = warmupBaseWeightFor(exercise)
+  if (!baseWeight) return []
+  if (!allowWeightEntryFor(exercise)) return []
+  const plan = warmupPlanFor(exercise)
+  return plan.map((step, idx) => {
+    if ('percentRange' in step) {
+      const [minPct, maxPct] = step.percentRange
+      const minWeight = formatWeight(baseWeight * minPct)
+      const maxWeight = formatWeight(baseWeight * maxPct)
+      return `Set ${idx + 1}: ${Math.round(minPct * 100)}–${Math.round(maxPct * 100)}% (~${minWeight}–${maxWeight} kg) · ${step.reps}`
+    }
+    const weight = formatWeight(baseWeight * step.percent)
+    return `Set ${idx + 1}: ${Math.round(step.percent * 100)}% (~${weight} kg) · ${step.reps}`
+  })
+}
+
+const feederSetNotes = [
+  'Do 4 feeder sets of 10 reps, building weight each set.',
+  'Set 1 RPE 4–5, Set 2 RPE 6–7, Set 3 RPE 7–8, Set 4 to failure at ~10 reps.',
+  'After failure, drop weight ~30–50% and do 5 more reps (controlled).'
+]
+
+const feedbackLabelFor = (exercise: ExerciseItem) => {
+  if (!allowWeightEntryFor(exercise)) return null
+  const phaseId = currentPhase.value?.id
+  if (!phaseId) return null
+  const hint = weightsStore.getFeedback(weightKeyFor(phaseId, exercise))
+  if (!hint) return null
+  if (hint === 'up') return 'Too light last time — increase'
+  if (hint === 'down') return 'Too heavy last time — decrease'
+  return 'Just right last time — keep'
+}
+
+const setFeedbackFor = (exercise: ExerciseItem, hint: 'up' | 'down' | 'hold') => {
+  const phaseId = currentPhase.value?.id
+  if (!phaseId) return
+  weightsStore.setFeedback(weightKeyFor(phaseId, exercise), hint)
 }
 
 const cleanSubs = (subs?: { name: string, link?: string }[]) => {
@@ -771,6 +1036,41 @@ const workoutDuration = (workout: WorkoutItem) => {
               >
                 {{ exercise.notes }}
               </p>
+              <div
+                v-if="allowWeightEntryFor(exercise)"
+                class="flex flex-wrap items-center gap-2 rounded-lg border border-muted/40 bg-white/60 px-3 py-2 text-xs dark:bg-gray-900/40"
+              >
+                <span class="text-[10px] uppercase tracking-wide text-muted">
+                  Working weight (kg)
+                </span>
+                <UInput
+                  size="xs"
+                  type="number"
+                  inputmode="decimal"
+                  step="0.5"
+                  class="w-24"
+                  :model-value="workingWeightDisplayFor(exercise)"
+                  :placeholder="workingWeightPlaceholderFor(exercise)"
+                  @update:model-value="val => updateWorkingWeight(exercise, val)"
+                />
+                <span
+                  v-if="feedbackLabelFor(exercise)"
+                  class="text-[10px] text-muted"
+                >
+                  {{ feedbackLabelFor(exercise) }}
+                </span>
+              </div>
+              <div
+                v-if="isFeederSet(exercise)"
+                class="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-primary/80"
+              >
+                <div
+                  v-for="note in feederSetNotes"
+                  :key="note"
+                >
+                  {{ note }}
+                </div>
+              </div>
               <div class="overflow-hidden rounded-lg bg-muted/5">
                 <div
                   v-if="exercise.warmupSets && toNumber(exercise.warmupSets) > 0"
@@ -801,17 +1101,28 @@ const workoutDuration = (workout: WorkoutItem) => {
                   </div>
                 </div>
                 <div
+                  v-if="warmupSummaryFor(exercise).length"
+                  class="border-b border-muted/40 bg-primary/5 px-3 py-2 text-xs text-primary/80"
+                >
+                  <div
+                    v-for="item in warmupSummaryFor(exercise)"
+                    :key="item"
+                  >
+                    {{ item }}
+                  </div>
+                </div>
+                <div
                   class="flex items-center justify-between px-3 py-3 bg-white/60 dark:bg-gray-900/40 cursor-pointer"
                   :class="[
                     setBorderClass(isMainCompleted(workout.id, exercise.id)),
                     isMainCompleted(workout.id, exercise.id)
                       ? 'border-t-2 border-solid border-muted'
-                      : 'border-t-2 border-dashed border-muted/60'
+                    : 'border-t-2 border-dashed border-muted/60'
                   ]"
                   :style="rowCompletionStyle(isMainCompleted(workout.id, exercise.id))"
                   @click="handleExerciseToggle(workout, exercise.id)"
                 >
-                  <div class="space-y-1">
+                  <div class="space-y-1 flex-1">
                     <p class="text-xs uppercase tracking-wide text-muted">
                       Main sets
                     </p>
@@ -820,6 +1131,41 @@ const workoutDuration = (workout: WorkoutItem) => {
                     </p>
                   </div>
                   <div
+                    v-if="allowWeightEntryFor(exercise)"
+                    class="flex flex-col items-end gap-1"
+                  >
+                    <div class="inline-flex overflow-hidden rounded-md border border-muted/40 bg-white/70 dark:bg-gray-900/50">
+                      <UButton
+                        variant="outline"
+                        color="neutral"
+                        icon="i-lucide-trending-up"
+                        @click.stop="() => { setFeedbackFor(exercise, 'up'); handleExerciseToggle(workout, exercise.id) }"
+                        class="rounded-none border-0"
+                      >
+                        <span class="hidden sm:inline">Too light</span>
+                      </UButton>
+                      <UButton
+                        variant="outline"
+                        color="neutral"
+                        icon="i-lucide-equal"
+                        @click.stop="() => { setFeedbackFor(exercise, 'hold'); handleExerciseToggle(workout, exercise.id) }"
+                        class="rounded-none border-0"
+                      >
+                        <span class="hidden sm:inline">Just right</span>
+                      </UButton>
+                      <UButton
+                        variant="outline"
+                        color="neutral"
+                        icon="i-lucide-trending-down"
+                        @click.stop="() => { setFeedbackFor(exercise, 'down'); handleExerciseToggle(workout, exercise.id) }"
+                        class="rounded-none border-0"
+                      >
+                        <span class="hidden sm:inline">Too heavy</span>
+                      </UButton>
+                    </div>
+                  </div>
+                  <div
+                    v-else
                     class="pointer-events-none flex h-8 w-8 items-center justify-center rounded-full border-2 transition"
                     :class="isMainCompleted(workout.id, exercise.id) ? 'bg-primary text-white border-primary' : 'bg-transparent text-muted border-muted/60'"
                     aria-hidden="true"

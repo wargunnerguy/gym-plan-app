@@ -17,6 +17,7 @@ logs
 .DS_Store
 .fleet
 .idea
+docs/4x Day(TRIMMED) Ultimate PPL System.pdf
 
 # Local env files
 .env
