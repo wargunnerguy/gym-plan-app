@@ -1,3 +1,5 @@
+import { skipHydrate } from 'pinia'
+
 type ViewState = {
   phaseId: string | null
   week: number | null
@@ -8,12 +10,12 @@ type ViewState = {
 const STORAGE_KEY = 'plan-view-state'
 
 export const useViewStore = defineStore('view', () => {
-  const viewState = ref<ViewState>({
+  const viewState = skipHydrate(ref<ViewState>({
     phaseId: null,
     week: null,
     workoutId: null,
     exerciseId: null
-  })
+  }))
   const hydrated = ref(false)
 
   const update = (patch: Partial<ViewState>) => {
@@ -34,7 +36,11 @@ export const useViewStore = defineStore('view', () => {
     const cached = localStorage.getItem(STORAGE_KEY)
     if (cached) {
       try {
-        viewState.value = { ...viewState.value, ...JSON.parse(cached) }
+        const parsed = JSON.parse(cached) as Partial<ViewState> | null
+        viewState.value = {
+          ...viewState.value,
+          ...(parsed && typeof parsed === 'object' ? parsed : {})
+        }
       } catch {
         viewState.value = {
           phaseId: null,

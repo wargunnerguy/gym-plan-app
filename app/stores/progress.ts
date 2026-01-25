@@ -8,10 +8,10 @@ const STORAGE_KEY_WARMUPS = 'plan-warmup-progress'
 const STORAGE_KEY_META = 'plan-progress-meta'
 
 export const useProgressStore = defineStore('progress', () => {
-  const completions = ref<Record<string, Completion>>({})
-  const exerciseCompletions = ref<Record<string, Completion>>({})
-  const warmupCompletions = ref<Record<string, Completion>>({})
-  const lastWorkoutDate = ref<string | null>(null)
+  const completions = skipHydrate(ref<Record<string, Completion>>({}))
+  const exerciseCompletions = skipHydrate(ref<Record<string, Completion>>({}))
+  const warmupCompletions = skipHydrate(ref<Record<string, Completion>>({}))
+  const lastWorkoutDate = skipHydrate(ref<string | null>(null))
 
   const keyFor = (phaseId: string, week: number, workoutId: string) => `${phaseId}:${week}:${workoutId}`
   const keyForExercise = (phaseId: string, week: number, workoutId: string, exerciseId: string) =>
@@ -96,7 +96,8 @@ export const useProgressStore = defineStore('progress', () => {
     const cached = localStorage.getItem(STORAGE_KEY)
     if (cached) {
       try {
-        completions.value = JSON.parse(cached)
+        const parsed = JSON.parse(cached) as Record<string, Completion> | null
+        completions.value = parsed && typeof parsed === 'object' ? { ...parsed } : {}
       } catch {
         completions.value = {}
       }
@@ -104,7 +105,8 @@ export const useProgressStore = defineStore('progress', () => {
     const exCached = localStorage.getItem(STORAGE_KEY_EXERCISES)
     if (exCached) {
       try {
-        exerciseCompletions.value = JSON.parse(exCached)
+        const parsed = JSON.parse(exCached) as Record<string, Completion> | null
+        exerciseCompletions.value = parsed && typeof parsed === 'object' ? { ...parsed } : {}
       } catch {
         exerciseCompletions.value = {}
       }
@@ -112,7 +114,8 @@ export const useProgressStore = defineStore('progress', () => {
     const warmCached = localStorage.getItem(STORAGE_KEY_WARMUPS)
     if (warmCached) {
       try {
-        warmupCompletions.value = JSON.parse(warmCached)
+        const parsed = JSON.parse(warmCached) as Record<string, Completion> | null
+        warmupCompletions.value = parsed && typeof parsed === 'object' ? { ...parsed } : {}
       } catch {
         warmupCompletions.value = {}
       }
@@ -141,3 +144,4 @@ export const useProgressStore = defineStore('progress', () => {
     clear
   }
 })
+import { skipHydrate } from 'pinia'

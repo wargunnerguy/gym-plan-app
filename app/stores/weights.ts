@@ -17,7 +17,7 @@ type WeightEntry = {
 const STORAGE_KEY = 'plan-exercise-weights'
 
 export const useWeightsStore = defineStore('weights', () => {
-  const weights = ref<Record<string, WeightEntry>>({})
+  const weights = skipHydrate(ref<Record<string, WeightEntry>>({}))
 
   const setCurrentWeight = (key: string, weight: number) => {
     if (!key) return
@@ -98,7 +98,8 @@ export const useWeightsStore = defineStore('weights', () => {
     const cached = localStorage.getItem(STORAGE_KEY)
     if (!cached) return
     try {
-      weights.value = JSON.parse(cached)
+      const parsed = JSON.parse(cached) as Record<string, WeightEntry> | null
+      weights.value = parsed && typeof parsed === 'object' ? { ...parsed } : {}
     } catch {
       weights.value = {}
     }
@@ -125,3 +126,4 @@ export const useWeightsStore = defineStore('weights', () => {
     getFeedback
   }
 })
+import { skipHydrate } from 'pinia'

@@ -48,8 +48,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <UApp>
-    <UHeader>
+  <ClientOnly>
+    <UApp>
+      <UHeader>
       <template #left>
         <NuxtLink
           to="/"
@@ -75,8 +76,9 @@ onMounted(() => {
       </template>
     </UHeader>
 
-    <UMain>
-      <NuxtPage />
-    </UMain>
-  </UApp>
+      <UMain>
+        <NuxtPage />
+      </UMain>
+    </UApp>
+  </ClientOnly>
 </template>

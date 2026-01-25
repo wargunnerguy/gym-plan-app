@@ -1,4 +1,6 @@
 <script setup lang="ts">
+definePageMeta({ ssr: false })
+
 const planStore = usePlanStore()
 const progressStore = useProgressStore()
 const viewStore = useViewStore()
@@ -547,7 +549,7 @@ const syncWorkoutCompletion = (workout: WorkoutItem) => {
   }
 }
 
-const toNumber = (input: string) => {
+function toNumber(input: string) {
   const match = String(input || '').match(/(\d+(\.\d+)?)/)
   return match ? Number(match[1]) : 0
 }
@@ -623,7 +625,7 @@ const workingWeightDisplayFor = (exercise: ExerciseItem) => {
 
 const workingWeightPlaceholderFor = (exercise: ExerciseItem) => {
   const weight = lastWeightFor(exercise)
-  return weight ? `${formatWeight(weight)} kg` : 'No previous weight'
+  return weight ? `${formatWeight(weight)} kg` : 'Enter'
 }
 
 const updateWorkingWeight = (exercise: ExerciseItem, value: string | number) => {
@@ -740,16 +742,15 @@ const parseRestRange = (rest: string) => {
 }
 
 const exerciseDuration = (exercise: ExerciseItem) => {
-  const warmups = toNumber(exercise.warmupSets)
-  const workings = toNumber(exercise.workingSets)
-  const sets = warmups + workings || 1
+  const warmups = Math.max(0, toNumber(exercise.warmupSets))
+  const workings = Math.max(0, toNumber(exercise.workingSets))
+  const sets = Math.max(1, warmups + workings)
   const restRange = parseRestRange(exercise.rest)
-  const restMinSec = restRange.min * 60
-  const restMaxSec = restRange.max * 60
-  const workPerSetSec = 90 // heuristic: average set effort
-  const setupPerSetSec = 20 // transition/setup buffer per set
-  const totalMin = sets * (workPerSetSec + setupPerSetSec) + Math.max(0, sets - 1) * restMinSec
-  const totalMax = sets * (workPerSetSec + setupPerSetSec) + Math.max(0, sets - 1) * restMaxSec
+  const restMinSec = Number.isFinite(restRange.min) ? restRange.min * 60 : 0
+  const restMaxSec = Number.isFinite(restRange.max) ? restRange.max * 60 : restMinSec
+  const avgSetSec = 50 // average time to perform a set
+  const totalMin = sets * avgSetSec + Math.max(0, sets - 1) * restMinSec
+  const totalMax = sets * avgSetSec + Math.max(0, sets - 1) * restMaxSec
   return {
     minSets: totalMin / 60,
     maxSets: totalMax / 60,
@@ -761,12 +762,12 @@ const exerciseDuration = (exercise: ExerciseItem) => {
 const workoutDuration = (workout: WorkoutItem) => {
   const totals = workout.exercises.map((ex: ExerciseItem) => exerciseDuration(ex))
   const minRaw = totals.reduce((sum: number, t, idx) => {
-    const restAfter = idx < totals.length - 1 ? t.restAfterMin : 0
-    return sum + t.minSets + restAfter
+    const transition = idx < totals.length - 1 ? 0.5 : 0
+    return sum + (Number.isFinite(t.minSets) ? t.minSets : 0) + transition
   }, 0)
   const maxRaw = totals.reduce((sum: number, t, idx) => {
-    const restAfter = idx < totals.length - 1 ? t.restAfterMax : 0
-    return sum + t.maxSets + restAfter
+    const transition = idx < totals.length - 1 ? 0.5 : 0
+    return sum + (Number.isFinite(t.maxSets) ? t.maxSets : 0) + transition
   }, 0)
   return {
     min: Math.ceil(minRaw),
