@@ -51,29 +51,29 @@ onMounted(() => {
   <ClientOnly>
     <UApp>
       <UHeader>
-      <template #left>
-        <NuxtLink
-          to="/"
-          class="flex items-center gap-2 font-semibold"
-        >
-          <UIcon
-            name="i-lucide-dumbbell"
-            class="h-5 w-5"
-          />
-          <span>Reimo&apos;s Gym</span>
-        </NuxtLink>
-      </template>
+        <template #left>
+          <NuxtLink
+            to="/"
+            class="flex items-center gap-2 font-semibold"
+          >
+            <UIcon
+              name="i-lucide-dumbbell"
+              class="h-5 w-5"
+            />
+            <span>Reimo&apos;s Gym</span>
+          </NuxtLink>
+        </template>
 
-      <template #right>
-        <UButton
-          size="sm"
-          color="neutral"
-          variant="ghost"
-          icon="i-lucide-settings"
-          @click="settingsOpen = true"
-        />
-        <UColorModeButton />
-      </template>
+        <template #right>
+          <UButton
+            size="sm"
+            color="neutral"
+            variant="ghost"
+            icon="i-lucide-settings"
+            @click="settingsOpen = true"
+          />
+          <UColorModeButton />
+        </template>
       </UHeader>
 
       <UMain>
