@@ -1090,7 +1090,7 @@ const workoutDuration = (workout: WorkoutItem) => {
                       Warm-up
                     </p>
                     <p class="text-sm text-primary/80">
-                      {{ exercise.warmupSets }} sets · {{ exercise.reps }} reps
+                      {{ exercise.warmupSets }} warm-up sets
                     </p>
                   </div>
                   <div
@@ -1101,17 +1101,19 @@ const workoutDuration = (workout: WorkoutItem) => {
                     <span class="text-base leading-none">✓</span>
                   </div>
                 </div>
-                <div
-                  v-if="warmupSummaryFor(exercise).length"
-                  class="border-b border-muted/40 bg-primary/5 px-3 py-2 text-xs text-primary/80"
-                >
+                <transition name="fade">
                   <div
-                    v-for="item in warmupSummaryFor(exercise)"
-                    :key="item"
+                    v-if="warmupSummaryFor(exercise).length && !isWarmupCompleted(workout.id, exercise.id)"
+                    class="border-b border-muted/40 bg-primary/5 px-3 py-2 text-xs text-primary/80"
                   >
-                    {{ item }}
+                    <div
+                      v-for="item in warmupSummaryFor(exercise)"
+                      :key="item"
+                    >
+                      {{ item }}
+                    </div>
                   </div>
-                </div>
+                </transition>
                 <div
                   class="flex items-center justify-between px-3 py-3 bg-white/60 dark:bg-gray-900/40 cursor-pointer"
                   :class="[
