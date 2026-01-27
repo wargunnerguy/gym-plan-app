@@ -74,7 +74,7 @@ onMounted(() => {
         />
         <UColorModeButton />
       </template>
-    </UHeader>
+      </UHeader>
 
       <UMain>
         <NuxtPage />
