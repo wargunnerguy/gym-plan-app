@@ -4,7 +4,6 @@ import { usePlanStore } from '@/stores/plan'
 const title = 'Reimo\'s Gym'
 const description = 'Offline-friendly viewer for your Google Sheets workout plans.'
 const settingsOpen = useState('settingsOpen', () => false)
-const selectedPhaseId = useState('selectedPhaseId', () => null)
 const planStore = usePlanStore()
 
 useHead({

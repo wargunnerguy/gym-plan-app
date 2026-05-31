@@ -28,8 +28,6 @@ type WorkoutItem = {
   exercises: ExerciseItem[]
 }
 
-const appConfig = useAppConfig()
-
 const currentPlan = computed(() => planStore.activePlan)
 
 const phaseOptions = computed(() =>
@@ -237,12 +235,6 @@ const currentWorkout = computed(() => {
   return nextWorkout.value
 })
 
-const currentWorkoutIndex = computed(() => {
-  const workouts = weekData.value?.workouts || []
-  return workouts.findIndex(w => w.id === currentWorkout.value?.id)
-})
-
-
 watch(
   () => selectedWeek.value,
   () => { selectedWorkoutId.value = null }
@@ -364,7 +356,6 @@ const isMainCompleted = (workoutId: string, exerciseId: string) => {
   return progressStore.isExerciseCompleted(phaseId, week, workoutId, exerciseId)
 }
 
-
 const isSkippedExercise = (workoutId: string, exerciseId: string) => {
   const phaseId = currentPhase.value?.id
   const week = weekData.value?.week
@@ -462,7 +453,6 @@ const handleExerciseToggle = (workout: WorkoutItem, exerciseId: string) => {
   syncWorkoutCompletion(workout)
 }
 
-
 const handleSkipExercise = (workout: WorkoutItem, exerciseId: string) => {
   const phaseId = currentPhase.value?.id
   const week = weekData.value?.week
@@ -501,12 +491,6 @@ const isLinkedBelow = (workout: WorkoutItem, idx: number) => {
   return current.group === next.group
 }
 
-const isLinkedAbove = (workout: WorkoutItem, idx: number) => {
-  const current = workout.exercises[idx]
-  const prev = workout.exercises[idx - 1]
-  if (!current?.group || !prev?.group) return false
-  return current.group === prev.group
-}
 
 const stickyTarget = computed(() => {
   const workout = currentWorkout.value
@@ -591,7 +575,7 @@ const workoutCompletionParts = (workout: WorkoutItem) => {
   let total = 0
   let completed = 0
 
-  workout.exercises.forEach(exercise => {
+  workout.exercises.forEach((exercise) => {
     total += 1
     if (phaseId && week) {
       if (isSkippedExercise(workout.id, exercise.id)) {
@@ -800,14 +784,13 @@ const setFeedbackFor = (exercise: ExerciseItem, hint: 'up' | 'down' | 'hold') =>
 }
 
 const cleanSubs = (subs?: { name: string, link?: string }[]) => {
-  return (subs || []).filter(sub => {
+  return (subs || []).filter((sub) => {
     const name = (sub?.name || '').trim().toLowerCase()
     return name && name !== 'n/a'
   })
 }
 
 const settingsOpen = useState('settingsOpen', () => false)
-
 </script>
 
 <template>
