@@ -46,7 +46,7 @@ export const useWeightsStore = defineStore('weights', () => {
     const updatedAt = new Date().toISOString()
     weights.value = {
       ...weights.value,
-      [key]: { ...weights.value[key], current: { weight, updatedAt } },
+      [key]: { ...weights.value[key], current: { weight, updatedAt } }
     }
   }
 
@@ -79,7 +79,7 @@ export const useWeightsStore = defineStore('weights', () => {
     if (!key) return
     weights.value = {
       ...weights.value,
-      [key]: { ...weights.value[key], feedback: { hint, updatedAt: new Date().toISOString() } },
+      [key]: { ...weights.value[key], feedback: { hint, updatedAt: new Date().toISOString() } }
     }
     postRow(key, 'weight_feedback', hint)
   }
@@ -102,7 +102,7 @@ export const useWeightsStore = defineStore('weights', () => {
     if (!url) return
 
     // Merge weights from Apps Script in background
-    $fetch(url).then((remote: any) => {
+    $fetch<{ weights?: Record<string, WeightEntry> }>(url).then((remote) => {
       if (!remote?.weights) return
       weights.value = { ...weights.value, ...remote.weights }
       localStorage.setItem(STORAGE_KEY, JSON.stringify(weights.value))

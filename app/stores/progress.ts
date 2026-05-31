@@ -139,7 +139,7 @@ export const useProgressStore = defineStore('progress', () => {
 
   const clearWeek = (phaseId: string, week: number) => {
     const prefix = `${phaseId}:${week}:`
-    const filterMap = (map: Ref<Record<string, any>>, type: string) => {
+    const filterMap = (map: Ref<Record<string, unknown>>, type: string) => {
       const toRemove = Object.keys(map.value).filter(k => k.startsWith(prefix))
       toRemove.forEach(key => postRow(key, type, ''))
       map.value = Object.fromEntries(Object.entries(map.value).filter(([k]) => !k.startsWith(prefix)))
@@ -161,7 +161,12 @@ export const useProgressStore = defineStore('progress', () => {
 
   const tryParse = <T>(raw: string | null, fallback: T): T => {
     if (!raw) return fallback
-    try { return JSON.parse(raw) as T } catch { return fallback }
+    try {
+      return JSON.parse(raw) as T
+    }
+    catch {
+      return fallback
+    }
   }
 
   onMounted(() => {
@@ -178,7 +183,13 @@ export const useProgressStore = defineStore('progress', () => {
     if (!url) return
 
     // Merge from Apps Script in background; remote wins for any present value
-    $fetch(url).then((remote: any) => {
+    $fetch<{
+      completions?: Record<string, Completion>
+      exerciseCompletions?: Record<string, Completion>
+      warmupCompletions?: Record<string, Completion>
+      skipCompletions?: Record<string, Skip>
+      lastWorkoutDate?: string | null
+    }>(url).then((remote) => {
       if (!remote) return
       if (remote.completions) {
         completions.value = { ...completions.value, ...remote.completions }
@@ -217,6 +228,6 @@ export const useProgressStore = defineStore('progress', () => {
     toggleSkip,
     lastWorkoutDate,
     clear,
-    clearWeek,
+    clearWeek
   }
 })

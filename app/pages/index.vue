@@ -491,7 +491,6 @@ const isLinkedBelow = (workout: WorkoutItem, idx: number) => {
   return current.group === next.group
 }
 
-
 const stickyTarget = computed(() => {
   const workout = currentWorkout.value
   const phaseId = currentPhase.value?.id
@@ -1134,7 +1133,7 @@ const settingsOpen = useState('settingsOpen', () => false)
                     setBorderClass(isMainCompleted(workout.id, exercise.id)),
                     isMainCompleted(workout.id, exercise.id)
                       ? 'border-t-2 border-solid border-muted'
-                    : 'border-t-2 border-dashed border-muted/60'
+                      : 'border-t-2 border-dashed border-muted/60'
                   ]"
                   :style="rowCompletionStyle(isMainCompleted(workout.id, exercise.id))"
                   @click="handleExerciseToggle(workout, exercise.id)"
@@ -1290,6 +1289,5 @@ const settingsOpen = useState('settingsOpen', () => false)
         </div>
       </div>
     </div>
-
   </UContainer>
 </template>
