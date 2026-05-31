@@ -29,7 +29,6 @@ type WorkoutItem = {
 }
 
 const appConfig = useAppConfig()
-const appVersion = computed(() => appConfig?.appVersion || '')
 
 const currentPlan = computed(() => planStore.activePlan)
 
@@ -164,7 +163,7 @@ const applyLastCompletion = () => {
   let bestPhaseId = ''
   let bestWeek = 0
 
-  const scan = (map: Record<string, { completedAt?: string; skippedAt?: string }>) => {
+  const scan = (map: Record<string, { completedAt?: string, skippedAt?: string }>) => {
     for (const [key, val] of Object.entries(map)) {
       const ts = val.completedAt ?? val.skippedAt ?? ''
       if (!ts || ts <= bestTs) continue
@@ -243,26 +242,6 @@ const currentWorkoutIndex = computed(() => {
   return workouts.findIndex(w => w.id === currentWorkout.value?.id)
 })
 
-const canGoPrev = computed(() => currentWorkoutIndex.value > 0)
-
-const canGoNext = computed(() => {
-  const workouts = weekData.value?.workouts || []
-  return currentWorkoutIndex.value < workouts.length - 1
-})
-
-const goPrevDay = () => {
-  const workouts = weekData.value?.workouts || []
-  if (currentWorkoutIndex.value > 0) {
-    selectedWorkoutId.value = workouts[currentWorkoutIndex.value - 1]?.id ?? null
-  }
-}
-
-const goNextDay = () => {
-  const workouts = weekData.value?.workouts || []
-  if (currentWorkoutIndex.value < workouts.length - 1) {
-    selectedWorkoutId.value = workouts[currentWorkoutIndex.value + 1]?.id ?? null
-  }
-}
 
 watch(
   () => selectedWeek.value,
@@ -385,12 +364,6 @@ const isMainCompleted = (workoutId: string, exerciseId: string) => {
   return progressStore.isExerciseCompleted(phaseId, week, workoutId, exerciseId)
 }
 
-const isWarmupCompleted = (workoutId: string, exerciseId: string) => {
-  const phaseId = currentPhase.value?.id
-  const week = weekData.value?.week
-  if (!phaseId || !week) return false
-  return progressStore.isWarmupCompleted(phaseId, week, workoutId, exerciseId)
-}
 
 const isSkippedExercise = (workoutId: string, exerciseId: string) => {
   const phaseId = currentPhase.value?.id
@@ -489,13 +462,6 @@ const handleExerciseToggle = (workout: WorkoutItem, exerciseId: string) => {
   syncWorkoutCompletion(workout)
 }
 
-const handleWarmupToggle = (workout: WorkoutItem, exerciseId: string) => {
-  const phaseId = currentPhase.value?.id
-  const week = weekData.value?.week
-  if (!phaseId || !week) return
-  progressStore.toggleWarmup(phaseId, week, workout.id, exerciseId)
-  syncWorkoutCompletion(workout)
-}
 
 const handleSkipExercise = (workout: WorkoutItem, exerciseId: string) => {
   const phaseId = currentPhase.value?.id
