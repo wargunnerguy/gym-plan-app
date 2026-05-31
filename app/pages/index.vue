@@ -979,11 +979,11 @@ const settingsOpen = useState('settingsOpen', () => false)
               :variant="w.id === workout.id ? 'solid' : progressStore.isCompleted(currentPhase!.id, weekData!.week, w.id) ? 'soft' : 'ghost'"
               @click="selectedWorkoutId = w.id"
             >
-              {{ w.dayName }}
+              {{ w.focus }}
             </UButton>
           </div>
           <h2 class="text-xl font-semibold">
-            {{ workout.dayName }}
+            {{ workout.focus }}
           </h2>
         </div>
 
