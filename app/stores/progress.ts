@@ -163,8 +163,7 @@ export const useProgressStore = defineStore('progress', () => {
     if (!raw) return fallback
     try {
       return JSON.parse(raw) as T
-    }
-    catch {
+    } catch {
       return fallback
     }
   }

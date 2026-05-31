@@ -115,7 +115,7 @@ export const useWeightsStore = defineStore('weights', () => {
       if (!import.meta.client) return
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
     },
-    { deep: true },
+    { deep: true }
   )
 
   return {
@@ -127,6 +127,6 @@ export const useWeightsStore = defineStore('weights', () => {
     getCurrentWeight,
     getWarmupBaseWeight,
     setFeedback,
-    getFeedback,
+    getFeedback
   }
 })
