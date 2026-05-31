@@ -49,8 +49,9 @@ export type NormalizedPlan = {
             load: string
             rpe: string
             rest: string
-            subs: string[]
+            subs: { name: string, link: string }[]
             notes: string
+            link: string
           }>
         }>
       }>

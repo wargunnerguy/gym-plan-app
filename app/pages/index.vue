@@ -6,27 +6,10 @@ const progressStore = useProgressStore()
 const viewStore = useViewStore()
 const weightsStore = useWeightsStore()
 
-type ExerciseItem = {
-  id: string
-  name: string
-  warmupSets: string
-  workingSets: string
-  reps: string
-  rest: string
-  rpe: string
-  group?: string
-  notes?: string
-  subs?: { name: string, link?: string }[]
-  link?: string
-}
+import type { NormalizedPlan } from '~/server/utils/transformPlan'
 
-type WorkoutItem = {
-  id: string
-  dayName: string
-  focus: string
-  order: number
-  exercises: ExerciseItem[]
-}
+type WorkoutItem = NormalizedPlan['plans'][number]['phases'][number]['weeks'][number]['workouts'][number]
+type ExerciseItem = WorkoutItem['exercises'][number]
 
 const currentPlan = computed(() => planStore.activePlan)
 
@@ -60,7 +43,7 @@ const pickInitialPhase = () => {
     return
   }
   const firstWithWork = phases.value.find(p => phaseHasRemaining(p.id))
-  selectedPhaseId.value = firstWithWork?.id ?? phases.value[0].id
+  selectedPhaseId.value = firstWithWork?.id ?? phases.value[0]!.id
 }
 
 watch(
@@ -109,7 +92,7 @@ const pickInitialWeek = () => {
   }
   const phaseId = currentPhase.value?.id
   if (!phaseId) {
-    selectedWeek.value = weeks[0].value
+    selectedWeek.value = weeks[0]!.value
     return
   }
   if (selectedWeek.value && currentPhase.value?.weeks.some(week => week.week === selectedWeek.value)) {
@@ -118,7 +101,7 @@ const pickInitialWeek = () => {
   const firstWithWorkLeft = currentPhase.value?.weeks.find(week =>
     week.workouts.some(w => !progressStore.isCompleted(phaseId, week.week, w.id))
   )
-  selectedWeek.value = (firstWithWorkLeft?.week ?? weeks[0].value)
+  selectedWeek.value = (firstWithWorkLeft?.week ?? weeks[0]!.value)
 }
 
 watch(
@@ -167,8 +150,8 @@ const applyLastCompletion = () => {
       if (!ts || ts <= bestTs) continue
       const parts = key.split(':')
       if (parts.length < 2) continue
-      const phaseId = parts[0]
-      const week = Number(parts[1])
+      const phaseId = parts[0] ?? ''
+      const week = Number(parts[1] ?? '')
       if (!Number.isFinite(week) || week <= 0) continue
       if (!phases.value.some(p => p.id === phaseId)) continue
       bestTs = ts
@@ -340,12 +323,12 @@ const advanceIfCompleted = () => {
     // Completed all phases/weeks: reset and clear progress
     progressStore.clear()
     viewStore.clear()
-    selectedPhaseId.value = ordered[0].id
-    selectedWeek.value = ordered[0].weeks[0]?.week ?? null
+    selectedPhaseId.value = ordered[0]!.id
+    selectedWeek.value = ordered[0]!.weeks[0]?.week ?? null
     return
   }
 
-  selectedPhaseId.value = ordered[nextPhaseIdx].id
+  selectedPhaseId.value = ordered[nextPhaseIdx]!.id
   pickInitialWeek()
 }
 

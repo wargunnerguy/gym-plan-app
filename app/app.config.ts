@@ -5,5 +5,5 @@ export default defineAppConfig({
       neutral: 'slate'
     }
   },
-  appVersion: process.env.npm_package_version || ''
+  appVersion: ''
 })
