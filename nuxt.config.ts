@@ -32,6 +32,12 @@ export default defineNuxtConfig({
     host: '0.0.0.0'
   },
 
+  runtimeConfig: {
+    public: {
+      userdataUrl: ''
+    }
+  },
+
   compatibilityDate: '2025-01-15',
 
   eslint: {

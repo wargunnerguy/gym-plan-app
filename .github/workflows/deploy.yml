@@ -23,14 +23,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Fetch plan from Google Sheets
         env:
@@ -38,10 +43,12 @@ jobs:
           GOOGLE_PROJECT_ID: ${{ secrets.GOOGLE_PROJECT_ID }}
           GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
           GOOGLE_PRIVATE_KEY: ${{ secrets.GOOGLE_PRIVATE_KEY }}
-        run: npm run fetch:plan
+        run: pnpm run fetch:plan
 
       - name: Generate site
-        run: npm run generate
+        env:
+          NUXT_PUBLIC_USERDATA_URL: https://script.google.com/macros/s/AKfycbzQj-_xnHE3xLvG04J0ncareF_p9v0AlNKgIPBp4B4q0ODHdNyGNy-oh76hYFZ7PCea/exec
+        run: pnpm run generate
 
       - name: Configure Pages
         uses: actions/configure-pages@v4

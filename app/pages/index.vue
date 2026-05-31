@@ -154,6 +154,52 @@ watch(
   { immediate: true }
 )
 
+const appliedLastCompletion = ref(false)
+
+const applyLastCompletion = () => {
+  if (appliedLastCompletion.value) return
+  if (!phases.value.length) return
+
+  let bestTs = ''
+  let bestPhaseId = ''
+  let bestWeek = 0
+
+  const scan = (map: Record<string, { completedAt?: string; skippedAt?: string }>) => {
+    for (const [key, val] of Object.entries(map)) {
+      const ts = val.completedAt ?? val.skippedAt ?? ''
+      if (!ts || ts <= bestTs) continue
+      const parts = key.split(':')
+      if (parts.length < 2) continue
+      const phaseId = parts[0]
+      const week = Number(parts[1])
+      if (!Number.isFinite(week) || week <= 0) continue
+      if (!phases.value.some(p => p.id === phaseId)) continue
+      bestTs = ts
+      bestPhaseId = phaseId
+      bestWeek = week
+    }
+  }
+
+  scan(progressStore.completions)
+  scan(progressStore.exerciseCompletions)
+  scan(progressStore.skipCompletions)
+
+  if (!bestPhaseId || !bestWeek) return
+
+  selectedPhaseId.value = bestPhaseId
+  selectedWeek.value = bestWeek
+  appliedLastCompletion.value = true
+}
+
+watch(
+  () => [
+    Object.keys(progressStore.completions).length + Object.keys(progressStore.exerciseCompletions).length,
+    phases.value.length
+  ],
+  () => { if (!appliedLastCompletion.value) applyLastCompletion() },
+  { immediate: true }
+)
+
 watch(
   () => selectedPhaseId.value,
   (phaseId) => {
@@ -182,7 +228,46 @@ const nextWorkout = computed(() => {
 const todayKey = () => new Date().toISOString().slice(0, 10)
 const blockedForToday = computed(() => progressStore.lastWorkoutDate === todayKey())
 
-const currentWorkout = computed(() => nextWorkout.value)
+const selectedWorkoutId = ref<string | null>(null)
+
+const currentWorkout = computed(() => {
+  const workouts = weekData.value?.workouts || []
+  if (selectedWorkoutId.value) {
+    return workouts.find(w => w.id === selectedWorkoutId.value) ?? nextWorkout.value
+  }
+  return nextWorkout.value
+})
+
+const currentWorkoutIndex = computed(() => {
+  const workouts = weekData.value?.workouts || []
+  return workouts.findIndex(w => w.id === currentWorkout.value?.id)
+})
+
+const canGoPrev = computed(() => currentWorkoutIndex.value > 0)
+
+const canGoNext = computed(() => {
+  const workouts = weekData.value?.workouts || []
+  return currentWorkoutIndex.value < workouts.length - 1
+})
+
+const goPrevDay = () => {
+  const workouts = weekData.value?.workouts || []
+  if (currentWorkoutIndex.value > 0) {
+    selectedWorkoutId.value = workouts[currentWorkoutIndex.value - 1]?.id ?? null
+  }
+}
+
+const goNextDay = () => {
+  const workouts = weekData.value?.workouts || []
+  if (currentWorkoutIndex.value < workouts.length - 1) {
+    selectedWorkoutId.value = workouts[currentWorkoutIndex.value + 1]?.id ?? null
+  }
+}
+
+watch(
+  () => selectedWeek.value,
+  () => { selectedWorkoutId.value = null }
+)
 
 watch(
   () => currentWorkout.value?.id,
@@ -307,11 +392,16 @@ const isWarmupCompleted = (workoutId: string, exerciseId: string) => {
   return progressStore.isWarmupCompleted(phaseId, week, workoutId, exerciseId)
 }
 
+const isSkippedExercise = (workoutId: string, exerciseId: string) => {
+  const phaseId = currentPhase.value?.id
+  const week = weekData.value?.week
+  if (!phaseId || !week) return false
+  return progressStore.isSkipped(phaseId, week, workoutId, exerciseId)
+}
+
 const isExerciseDone = (workout: WorkoutItem, exercise: ExerciseItem) => {
-  const mainDone = isMainCompleted(workout.id, exercise.id)
-  const hasWarmup = toNumber(exercise.warmupSets) > 0
-  const warmDone = hasWarmup ? isWarmupCompleted(workout.id, exercise.id) : true
-  return mainDone && warmDone
+  if (isSkippedExercise(workout.id, exercise.id)) return true
+  return isMainCompleted(workout.id, exercise.id)
 }
 
 const nextIncompleteSegment = (workout: WorkoutItem) => {
@@ -320,10 +410,7 @@ const nextIncompleteSegment = (workout: WorkoutItem) => {
   if (!phaseId || !week) return null
 
   for (const exercise of workout.exercises) {
-    const hasWarmup = toNumber(exercise.warmupSets) > 0
-    if (hasWarmup && !isWarmupCompleted(workout.id, exercise.id)) {
-      return { exercise, stage: 'warmup' as const }
-    }
+    if (isSkippedExercise(workout.id, exercise.id)) continue
     if (!isMainCompleted(workout.id, exercise.id)) {
       return { exercise, stage: 'main' as const }
     }
@@ -407,6 +494,28 @@ const handleWarmupToggle = (workout: WorkoutItem, exerciseId: string) => {
   const week = weekData.value?.week
   if (!phaseId || !week) return
   progressStore.toggleWarmup(phaseId, week, workout.id, exerciseId)
+  syncWorkoutCompletion(workout)
+}
+
+const handleSkipExercise = (workout: WorkoutItem, exerciseId: string) => {
+  const phaseId = currentPhase.value?.id
+  const week = weekData.value?.week
+  if (!phaseId || !week) return
+  progressStore.toggleSkip(phaseId, week, workout.id, exerciseId)
+  setOpenForExercise(workout.id, exerciseId, false)
+  openNextActive(workout)
+  syncWorkoutCompletion(workout)
+}
+
+const finishDay = (workout: WorkoutItem) => {
+  const phaseId = currentPhase.value?.id
+  const week = weekData.value?.week
+  if (!phaseId || !week) return
+  for (const exercise of workout.exercises) {
+    if (!isExerciseDone(workout, exercise)) {
+      progressStore.toggleSkip(phaseId, week, workout.id, exercise.id)
+    }
+  }
   syncWorkoutCompletion(workout)
 }
 
@@ -502,12 +611,12 @@ watch(
 
 const markStickyDone = () => {
   if (!stickyTarget.value || !currentWorkout.value) return
-  const { exercise, stage } = stickyTarget.value
-  if (stage === 'warmup') {
-    handleWarmupToggle(currentWorkout.value, exercise.id)
-  } else {
-    handleExerciseToggle(currentWorkout.value, exercise.id)
-  }
+  handleExerciseToggle(currentWorkout.value, stickyTarget.value.exercise.id)
+}
+
+const markStickySkipped = () => {
+  if (!stickyTarget.value || !currentWorkout.value) return
+  handleSkipExercise(currentWorkout.value, stickyTarget.value.exercise.id)
 }
 
 const workoutCompletionParts = (workout: WorkoutItem) => {
@@ -517,10 +626,12 @@ const workoutCompletionParts = (workout: WorkoutItem) => {
   let completed = 0
 
   workout.exercises.forEach(exercise => {
-    const hasWarmup = toNumber(exercise.warmupSets) > 0
-    total += hasWarmup ? 2 : 1
+    total += 1
     if (phaseId && week) {
-      if (hasWarmup && isWarmupCompleted(workout.id, exercise.id)) completed += 1
+      if (isSkippedExercise(workout.id, exercise.id)) {
+        completed += 1
+        return
+      }
       if (isMainCompleted(workout.id, exercise.id)) completed += 1
     }
   })
@@ -731,49 +842,6 @@ const cleanSubs = (subs?: { name: string, link?: string }[]) => {
 
 const settingsOpen = useState('settingsOpen', () => false)
 
-const parseRestRange = (rest: string) => {
-  const matches = String(rest || '').match(/(\d+(\.\d+)?)/g)
-  if (!matches || !matches.length) return { min: 0, max: 0 }
-  if (matches.length === 1) {
-    const val = Number(matches[0])
-    return { min: val, max: val }
-  }
-  return { min: Number(matches[0]), max: Number(matches[1]) }
-}
-
-const exerciseDuration = (exercise: ExerciseItem) => {
-  const warmups = Math.max(0, toNumber(exercise.warmupSets))
-  const workings = Math.max(0, toNumber(exercise.workingSets))
-  const sets = Math.max(1, warmups + workings)
-  const restRange = parseRestRange(exercise.rest)
-  const restMinSec = Number.isFinite(restRange.min) ? restRange.min * 60 : 0
-  const restMaxSec = Number.isFinite(restRange.max) ? restRange.max * 60 : restMinSec
-  const avgSetSec = 50 // average time to perform a set
-  const totalMin = sets * avgSetSec + Math.max(0, sets - 1) * restMinSec
-  const totalMax = sets * avgSetSec + Math.max(0, sets - 1) * restMaxSec
-  return {
-    minSets: totalMin / 60,
-    maxSets: totalMax / 60,
-    restAfterMin: restRange.min,
-    restAfterMax: restRange.max
-  }
-}
-
-const workoutDuration = (workout: WorkoutItem) => {
-  const totals = workout.exercises.map((ex: ExerciseItem) => exerciseDuration(ex))
-  const minRaw = totals.reduce((sum: number, t, idx) => {
-    const transition = idx < totals.length - 1 ? 0.5 : 0
-    return sum + (Number.isFinite(t.minSets) ? t.minSets : 0) + transition
-  }, 0)
-  const maxRaw = totals.reduce((sum: number, t, idx) => {
-    const transition = idx < totals.length - 1 ? 0.5 : 0
-    return sum + (Number.isFinite(t.maxSets) ? t.maxSets : 0) + transition
-  }, 0)
-  return {
-    min: Math.ceil(minRaw),
-    max: Math.ceil(maxRaw)
-  }
-}
 </script>
 
 <template>
@@ -824,16 +892,31 @@ const workoutDuration = (workout: WorkoutItem) => {
             Week
           </p>
           <div class="flex flex-wrap gap-2">
-            <UButton
+            <div
               v-for="week in weeks"
               :key="week.week"
-              size="xs"
-              :color="week.week === selectedWeek ? 'primary' : 'neutral'"
-              :variant="week.week === selectedWeek ? 'soft' : 'ghost'"
-              @click="() => { selectedWeek = week.week; settingsOpen = false }"
+              class="flex items-center"
             >
-              Week {{ week.week }}
-            </UButton>
+              <UButton
+                size="xs"
+                :color="week.week === selectedWeek ? 'primary' : 'neutral'"
+                :variant="week.week === selectedWeek ? 'soft' : 'ghost'"
+                class="rounded-r-none"
+                @click="() => { selectedWeek = week.week; settingsOpen = false }"
+              >
+                Week {{ week.week }}
+              </UButton>
+              <UTooltip text="Repeat this week">
+                <UButton
+                  size="xs"
+                  color="neutral"
+                  variant="ghost"
+                  icon="i-lucide-rotate-ccw"
+                  class="rounded-l-none border-l border-muted/30"
+                  @click="() => { progressStore.clearWeek(currentPhase.id, week.week); selectedWeek = week.week; settingsOpen = false }"
+                />
+              </UTooltip>
+            </div>
           </div>
         </div>
       </div>
@@ -938,25 +1021,22 @@ const workoutDuration = (workout: WorkoutItem) => {
           </span>
         </div>
 
-        <div class="flex items-start justify-between gap-3">
-          <div class="space-y-1">
-            <p class="text-xs uppercase tracking-wide text-muted">
-              Day {{ workout.order }}<span v-if="weekData?.workouts?.length">/{{ weekData?.workouts.length }}</span>
-            </p>
-            <h2 class="text-xl font-semibold">
-              {{ workout.dayName }}
-            </h2>
+        <div class="space-y-2">
+          <div class="flex flex-wrap gap-1">
+            <UButton
+              v-for="w in weekData?.workouts"
+              :key="w.id"
+              size="2xs"
+              :color="w.id === workout.id ? 'primary' : progressStore.isCompleted(currentPhase!.id, weekData!.week, w.id) ? 'success' : 'neutral'"
+              :variant="w.id === workout.id ? 'solid' : progressStore.isCompleted(currentPhase!.id, weekData!.week, w.id) ? 'soft' : 'ghost'"
+              @click="selectedWorkoutId = w.id"
+            >
+              {{ w.dayName }}
+            </UButton>
           </div>
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-muted">
-              {{
-                (() => {
-                  const d = workoutDuration(workout)
-                  return d.min === d.max ? `${d.min} min` : `${d.min}–${d.max} min`
-                })()
-              }}
-            </span>
-          </div>
+          <h2 class="text-xl font-semibold">
+            {{ workout.dayName }}
+          </h2>
         </div>
 
         <div class="space-y-2">
@@ -964,7 +1044,7 @@ const workoutDuration = (workout: WorkoutItem) => {
             v-for="(exercise, idx) in workout.exercises"
             :key="exercise.id"
             class="rounded-lg border border-muted/50 bg-muted/5 px-3 py-2 transition-all"
-            :class="isExerciseDone(workout, exercise) ? 'opacity-60 line-through border-primary/40 bg-primary/5' : ''"
+            :class="isSkippedExercise(workout.id, exercise.id) ? 'opacity-60 line-through border-yellow-500/40 bg-yellow-500/5' : isExerciseDone(workout, exercise) ? 'opacity-60 line-through border-primary/40 bg-primary/5' : ''"
           >
             <div class="flex flex-wrap items-start gap-2">
               <div class="flex min-w-0 flex-1 flex-wrap items-center gap-2">
@@ -1011,14 +1091,16 @@ const workoutDuration = (workout: WorkoutItem) => {
                 >
                   RPE {{ exercise.rpe }}
                 </UBadge>
-                <span class="text-xs text-muted">
-                  {{
-                    (() => {
-                      const d = exerciseDuration(exercise)
-                      return `${Math.ceil(d.maxSets + d.restAfterMax)}m`
-                    })()
-                  }}
-                </span>
+                <UTooltip :text="isSkippedExercise(workout.id, exercise.id) ? 'Unskip' : 'Skip'">
+                  <UButton
+                    v-if="!isMainCompleted(workout.id, exercise.id)"
+                    size="2xs"
+                    variant="ghost"
+                    :color="isSkippedExercise(workout.id, exercise.id) ? 'warning' : 'neutral'"
+                    icon="i-lucide-skip-forward"
+                    @click="handleSkipExercise(workout, exercise.id)"
+                  />
+                </UTooltip>
                 <UButton
                   size="2xs"
                   variant="ghost"
@@ -1075,35 +1157,18 @@ const workoutDuration = (workout: WorkoutItem) => {
               <div class="overflow-hidden rounded-lg bg-muted/5">
                 <div
                   v-if="exercise.warmupSets && toNumber(exercise.warmupSets) > 0"
-                  class="flex items-center justify-between px-3 py-2 bg-primary/5 cursor-pointer"
-                  :class="[
-                    setBorderClass(isWarmupCompleted(workout.id, exercise.id)),
-                    isWarmupCompleted(workout.id, exercise.id)
-                      ? 'border-b-2 border-solid border-muted'
-                      : 'border-b-2 border-dashed border-muted/60'
-                  ]"
-                  :style="rowCompletionStyle(isWarmupCompleted(workout.id, exercise.id))"
-                  @click="handleWarmupToggle(workout, exercise.id)"
+                  class="border-b-2 border-dashed border-muted/60 bg-primary/5 px-3 py-2"
                 >
-                  <div class="space-y-1">
-                    <p class="text-xs uppercase tracking-wide text-primary">
-                      Warm-up
-                    </p>
-                    <p class="text-sm text-primary/80">
-                      {{ exercise.warmupSets }} warm-up sets
-                    </p>
-                  </div>
-                  <div
-                    class="pointer-events-none flex h-8 w-8 items-center justify-center rounded-full border-2 transition"
-                    :class="isWarmupCompleted(workout.id, exercise.id) ? 'bg-primary text-white border-primary' : 'bg-transparent text-muted border-muted/60'"
-                    aria-hidden="true"
-                  >
-                    <span class="text-base leading-none">✓</span>
-                  </div>
+                  <p class="text-xs uppercase tracking-wide text-primary">
+                    Warm-up
+                  </p>
+                  <p class="text-sm text-primary/80">
+                    {{ exercise.warmupSets }} warm-up sets
+                  </p>
                 </div>
                 <transition name="fade">
                   <div
-                    v-if="warmupSummaryFor(exercise).length && !isWarmupCompleted(workout.id, exercise.id)"
+                    v-if="warmupSummaryFor(exercise).length"
                     class="border-b border-muted/40 bg-primary/5 px-3 py-2 text-xs text-primary/80"
                   >
                     <div
@@ -1211,6 +1276,21 @@ const workoutDuration = (workout: WorkoutItem) => {
             </template>
           </div>
         </div>
+
+        <div
+          v-if="!workoutFullyDone(workout)"
+          class="pt-1"
+        >
+          <UButton
+            size="sm"
+            color="neutral"
+            variant="outline"
+            icon="i-lucide-flag"
+            @click="finishDay(workout)"
+          >
+            Finish Day
+          </UButton>
+        </div>
       </UCard>
     </div>
 
@@ -1237,22 +1317,27 @@ const workoutDuration = (workout: WorkoutItem) => {
       class="pointer-events-none fixed inset-x-0 bottom-0 px-4 pb-5"
     >
       <div class="pointer-events-auto mx-auto max-w-3xl">
-        <div class="rounded-2xl border border-muted/40 bg-white/90 shadow-lg backdrop-blur dark:bg-gray-900/90">
-          <UButton
-            block
-            size="lg"
-            :color="stickyTarget.stage === 'warmup' ? 'warning' : 'primary'"
-            class="h-14 text-base"
-            icon="i-heroicons-check-circle"
-            @click="markStickyDone"
-          >
-            <template v-if="stickyTarget.stage === 'warmup'">
-              Mark warm-up for {{ stickyTarget.exercise.name }} done
-            </template>
-            <template v-else>
+        <div class="overflow-hidden rounded-2xl border border-muted/40 bg-white/90 shadow-lg backdrop-blur dark:bg-gray-900/90">
+          <div class="flex">
+            <UButton
+              class="h-14 flex-1 !rounded-none text-base"
+              size="lg"
+              color="primary"
+              icon="i-heroicons-check-circle"
+              @click="markStickyDone"
+            >
               Mark {{ stickyTarget.exercise.name }} done
-            </template>
-          </UButton>
+            </UButton>
+            <div class="w-px self-stretch bg-muted/30" />
+            <UButton
+              class="h-14 w-16 !rounded-none"
+              size="lg"
+              color="neutral"
+              variant="ghost"
+              icon="i-lucide-skip-forward"
+              @click="markStickySkipped"
+            />
+          </div>
         </div>
       </div>
     </div>
