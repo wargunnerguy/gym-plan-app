@@ -20,6 +20,7 @@ export const useViewStore = defineStore('view', () => {
     exerciseVariants: {}
   }))
   const hydrated = ref(false)
+  const remoteViewStateLoaded = ref(false)
 
   const postRow = (key: string, type: string, value: string) => {
     const url = config.public.userdataUrl
@@ -30,6 +31,12 @@ export const useViewStore = defineStore('view', () => {
 
   const update = (patch: Partial<ViewState>) => {
     viewState.value = { ...viewState.value, ...patch }
+    if ('phaseId' in patch && patch.phaseId) {
+      postRow('meta', 'view_phaseId', patch.phaseId)
+    }
+    if ('week' in patch && patch.week != null) {
+      postRow('meta', 'view_week', String(patch.week))
+    }
   }
 
   const clear = () => {
@@ -79,13 +86,20 @@ export const useViewStore = defineStore('view', () => {
 
     const url = config.public.userdataUrl
     if (!url) return
-    $fetch<{ exerciseVariants?: Record<string, number> }>(url).then((remote) => {
-      if (!remote?.exerciseVariants) return
-      viewState.value = {
-        ...viewState.value,
-        exerciseVariants: { ...viewState.value.exerciseVariants, ...remote.exerciseVariants }
+    $fetch<{ exerciseVariants?: Record<string, number>, viewPhaseId?: string, viewWeek?: number }>(url).then((remote) => {
+      const patch: Partial<ViewState> = {}
+      if (remote?.exerciseVariants) {
+        patch.exerciseVariants = { ...viewState.value.exerciseVariants, ...remote.exerciseVariants }
       }
-    }).catch(() => {})
+      if (remote?.viewPhaseId) patch.phaseId = remote.viewPhaseId
+      if (remote?.viewWeek != null) patch.week = remote.viewWeek
+      if (Object.keys(patch).length) {
+        viewState.value = { ...viewState.value, ...patch }
+      }
+      remoteViewStateLoaded.value = true
+    }).catch(() => {
+      remoteViewStateLoaded.value = true
+    })
   })
 
   watch(
@@ -100,6 +114,7 @@ export const useViewStore = defineStore('view', () => {
   return {
     viewState,
     hydrated,
+    remoteViewStateLoaded,
     update,
     clear,
     cycleExerciseVariant

@@ -53,6 +53,8 @@ function handleRead() {
   const weights = {}
   const exerciseVariants = {}
   let lastWorkoutDate = null
+  let viewPhaseId = null
+  let viewWeek = null
 
   Object.values(latest).forEach(function(entry) {
     if (entry.type !== 'exercise_variant' && !entry.value) return // empty = untoggled/deleted
@@ -85,10 +87,15 @@ function handleRead() {
     } else if (entry.type === 'exercise_variant') {
       var idx = Number(entry.value)
       if (isFinite(idx)) exerciseVariants[entry.key] = idx
+    } else if (entry.type === 'view_phaseId' && entry.key === 'meta') {
+      viewPhaseId = entry.value
+    } else if (entry.type === 'view_week' && entry.key === 'meta') {
+      var wk = Number(entry.value)
+      if (isFinite(wk)) viewWeek = wk
     }
   })
 
-  return json({ completions, exerciseCompletions, warmupCompletions, skipCompletions, lastWorkoutDate, weights, exerciseVariants })
+  return json({ completions, exerciseCompletions, warmupCompletions, skipCompletions, lastWorkoutDate, weights, exerciseVariants, viewPhaseId, viewWeek })
 }
 
 // ── Append one row ────────────────────────────────────────────────────────────

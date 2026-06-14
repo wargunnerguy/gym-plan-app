@@ -117,21 +117,34 @@ const applyViewState = () => {
   if (!viewStore.hydrated) return
   if (!phases.value.length) return
   const storedPhaseId = viewStore.viewState.phaseId
+  let applied = false
   if (storedPhaseId && phases.value.some(p => p.id === storedPhaseId)) {
     selectedPhaseId.value = storedPhaseId
+    applied = true
   }
   const phase = phases.value.find(p => p.id === (storedPhaseId ?? selectedPhaseId.value))
   const storedWeek = viewStore.viewState.week
   if (storedWeek && phase?.weeks.some(week => week.week === storedWeek)) {
     selectedWeek.value = storedWeek
+    applied = true
   }
-  appliedViewState.value = true
+  if (applied) appliedViewState.value = true
 }
 
 watch(
   () => [phases.value.length, viewStore.viewState.phaseId, viewStore.viewState.week],
   () => applyViewState(),
   { immediate: true }
+)
+
+watch(
+  () => viewStore.remoteViewStateLoaded,
+  (loaded) => {
+    if (loaded) {
+      appliedViewState.value = false
+      applyViewState()
+    }
+  }
 )
 
 const appliedLastCompletion = ref(false)
