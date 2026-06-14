@@ -279,6 +279,10 @@ const visibleWorkouts = computed(() => {
   return [currentWorkout.value]
 })
 
+const displayedNextWorkout = computed(() =>
+  blockedForToday.value ? currentWorkout.value : upcomingWorkout.value
+)
+
 const completedToday = computed(() => {
   const phaseId = currentPhase.value?.id
   if (!phaseId || !weekData.value) return null
@@ -1241,19 +1245,19 @@ const settingsOpen = useState('settingsOpen', () => false)
     </div>
 
     <div
-      v-if="upcomingWorkout"
+      v-if="displayedNextWorkout"
       class="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3"
     >
       <p class="text-xs uppercase tracking-wide text-primary">
         Next up
       </p>
       <div class="flex flex-wrap items-center gap-2">
-        <span class="text-lg font-semibold">{{ upcomingWorkout.dayName }}</span>
+        <span class="text-lg font-semibold">{{ displayedNextWorkout.dayName }}</span>
         <UBadge
           color="neutral"
           variant="soft"
         >
-          {{ upcomingWorkout.exercises.length }} exercises
+          {{ displayedNextWorkout.exercises.length }} exercises
         </UBadge>
       </div>
     </div>
