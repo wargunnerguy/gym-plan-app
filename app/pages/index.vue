@@ -427,8 +427,8 @@ const handleExerciseToggle = (workout: WorkoutItem, exerciseId: string) => {
   if (!wasCompleted) {
     const exercise = workout.exercises.find(ex => ex.id === exerciseId)
     if (exercise && allowWeightEntryFor(exercise)) {
-      weightsStore.commitCurrentAsLast(weightKeyFor(phaseId, exercise))
-      weightsStore.clearCurrentWeight(weightKeyFor(phaseId, exercise))
+      weightsStore.commitCurrentAsLast(effectiveWeightKeyFor(phaseId, exercise))
+      weightsStore.clearCurrentWeight(effectiveWeightKeyFor(phaseId, exercise))
     }
   }
   setOpenForExercise(workout.id, exerciseId, false)
@@ -639,21 +639,21 @@ const lastWeightFor = (exercise: ExerciseItem) => {
   if (!allowWeightEntryFor(exercise)) return null
   const phaseId = currentPhase.value?.id
   if (!phaseId) return null
-  return weightsStore.getLastWeight(weightKeyFor(phaseId, exercise))
+  return weightsStore.getLastWeight(effectiveWeightKeyFor(phaseId, exercise))
 }
 
 const currentWeightFor = (exercise: ExerciseItem) => {
   if (!allowWeightEntryFor(exercise)) return null
   const phaseId = currentPhase.value?.id
   if (!phaseId) return null
-  return weightsStore.getCurrentWeight(weightKeyFor(phaseId, exercise))
+  return weightsStore.getCurrentWeight(effectiveWeightKeyFor(phaseId, exercise))
 }
 
 const warmupBaseWeightFor = (exercise: ExerciseItem) => {
   if (!allowWeightEntryFor(exercise)) return null
   const phaseId = currentPhase.value?.id
   if (!phaseId) return null
-  return weightsStore.getWarmupBaseWeight(weightKeyFor(phaseId, exercise))
+  return weightsStore.getWarmupBaseWeight(effectiveWeightKeyFor(phaseId, exercise))
 }
 
 const formatWeight = (value: number) => {
@@ -676,10 +676,10 @@ const updateWorkingWeight = (exercise: ExerciseItem, value: string | number) => 
   if (!phaseId) return
   const raw = typeof value === 'number' ? value : Number(String(value || '').replace(',', '.'))
   if (!Number.isFinite(raw) || raw <= 0) {
-    weightsStore.clearCurrentWeight(weightKeyFor(phaseId, exercise))
+    weightsStore.clearCurrentWeight(effectiveWeightKeyFor(phaseId, exercise))
     return
   }
-  weightsStore.setCurrentWeight(weightKeyFor(phaseId, exercise), raw)
+  weightsStore.setCurrentWeight(effectiveWeightKeyFor(phaseId, exercise), raw)
 }
 
 const currentPhaseNumber = computed(() => {
@@ -699,29 +699,33 @@ const warmupPlanFor = (exercise: ExerciseItem) => {
   const reps = parseRepRange(exercise.reps)
   const isPhase3HighReps = phaseNumber === 3 && reps.max >= 15
 
+  const r1 = reps.min
+  const r2 = Math.max(1, Math.round(reps.min * 0.7))
+  const r3 = Math.max(1, Math.round(reps.min * 0.5))
+
   if (isPhase3HighReps) {
     if (warmupSets <= 1) {
-      return [{ percentRange: [0.5, 0.7], reps: '5-10 reps' }]
+      return [{ percentRange: [0.5, 0.7], reps: `${r1} reps` }]
     }
     return [
-      { percent: 0.5, reps: '5-10 reps' },
-      { percent: 0.7, reps: '5-10 reps' }
+      { percent: 0.5, reps: `${r1} reps` },
+      { percent: 0.7, reps: `${r2} reps` }
     ]
   }
 
   if (warmupSets === 1) {
-    return [{ percent: 0.6, reps: 'same reps' }]
+    return [{ percent: 0.6, reps: `${r1} reps` }]
   }
   if (warmupSets === 2) {
     return [
-      { percent: 0.5, reps: 'same reps' },
-      { percent: 0.7, reps: 'few less reps' }
+      { percent: 0.5, reps: `${r1} reps` },
+      { percent: 0.7, reps: `${r2} reps` }
     ]
   }
   return [
-    { percent: 0.45, reps: 'same reps' },
-    { percent: 0.65, reps: 'few less reps' },
-    { percent: 0.85, reps: 'few less reps' }
+    { percent: 0.45, reps: `${r1} reps` },
+    { percent: 0.65, reps: `${r2} reps` },
+    { percent: 0.85, reps: `${r3} reps` }
   ]
 }
 
@@ -752,7 +756,7 @@ const feedbackLabelFor = (exercise: ExerciseItem) => {
   if (!allowWeightEntryFor(exercise)) return null
   const phaseId = currentPhase.value?.id
   if (!phaseId) return null
-  const hint = weightsStore.getFeedback(weightKeyFor(phaseId, exercise))
+  const hint = weightsStore.getFeedback(effectiveWeightKeyFor(phaseId, exercise))
   if (!hint) return null
   if (hint === 'up') return 'Too light last time — increase'
   if (hint === 'down') return 'Too heavy last time — decrease'
@@ -762,7 +766,7 @@ const feedbackLabelFor = (exercise: ExerciseItem) => {
 const setFeedbackFor = (exercise: ExerciseItem, hint: 'up' | 'down' | 'hold') => {
   const phaseId = currentPhase.value?.id
   if (!phaseId) return
-  weightsStore.setFeedback(weightKeyFor(phaseId, exercise), hint)
+  weightsStore.setFeedback(effectiveWeightKeyFor(phaseId, exercise), hint)
 }
 
 const cleanSubs = (subs?: { name: string, link?: string }[]) => {
@@ -771,6 +775,28 @@ const cleanSubs = (subs?: { name: string, link?: string }[]) => {
     return name && name !== 'n/a'
   })
 }
+
+const effectiveNameFor = (exercise: ExerciseItem): string => {
+  const idx = viewStore.viewState.exerciseVariants?.[exercise.id] ?? 0
+  if (idx > 0) {
+    const sub = cleanSubs(exercise.subs)[idx - 1]
+    if (sub) return sub.name
+  }
+  return exercise.name
+}
+
+const effectiveLinkFor = (exercise: ExerciseItem): string => {
+  const idx = viewStore.viewState.exerciseVariants?.[exercise.id] ?? 0
+  if (idx > 0) {
+    const sub = cleanSubs(exercise.subs)[idx - 1]
+    if (sub?.link) return sub.link
+    return ''
+  }
+  return exercise.link ?? ''
+}
+
+const effectiveWeightKeyFor = (phaseId: string, exercise: ExerciseItem) =>
+  `${phaseId}:${normalizeKey(effectiveNameFor(exercise))}:${normalizeKey(exercise.reps)}:${normalizeKey(exercise.workingSets)}`
 
 const settingsOpen = useState('settingsOpen', () => false)
 </script>
@@ -989,19 +1015,19 @@ const settingsOpen = useState('settingsOpen', () => false)
                   />
                 </UTooltip>
                 <span
-                  v-if="!exercise.link"
+                  v-if="!effectiveLinkFor(exercise)"
                   class="text-sm font-medium"
                 >
-                  {{ exercise.name }}
+                  {{ effectiveNameFor(exercise) }}
                 </span>
                 <a
                   v-else
                   class="text-sm font-medium text-primary underline-offset-4 hover:underline"
-                  :href="exercise.link"
+                  :href="effectiveLinkFor(exercise)"
                   target="_blank"
                   rel="noreferrer"
                 >
-                  {{ exercise.name }}
+                  {{ effectiveNameFor(exercise) }}
                 </a>
                 <span
                   v-if="isDetailsOpen(workout, exercise.id)"
@@ -1014,6 +1040,14 @@ const settingsOpen = useState('settingsOpen', () => false)
                     Rest {{ exercise.rest }}
                   </template>
                 </span>
+                <UButton
+                  v-if="cleanSubs(exercise.subs).length"
+                  size="2xs"
+                  variant="ghost"
+                  color="neutral"
+                  icon="i-lucide-refresh-cw"
+                  @click.stop="viewStore.cycleExerciseVariant(exercise.id, cleanSubs(exercise.subs).length + 1)"
+                />
               </div>
               <div class="flex items-center gap-2">
                 <UBadge
@@ -1174,37 +1208,6 @@ const settingsOpen = useState('settingsOpen', () => false)
                 </div>
               </div>
             </div>
-            <template v-if="!isExerciseDone(workout, exercise) && isDetailsOpen(workout, exercise.id)">
-              <div
-                v-if="cleanSubs(exercise.subs).length"
-                class="flex flex-wrap gap-2 pt-1"
-              >
-                <div
-                  v-for="(sub, idx) in cleanSubs(exercise.subs)"
-                  :key="idx"
-                  class="flex items-center gap-1"
-                >
-                  <UBadge
-                    color="primary"
-                    variant="ghost"
-                  >
-                    Sub:
-                    <span v-if="!sub.link">
-                      {{ sub.name }}
-                    </span>
-                    <a
-                      v-else
-                      class="text-primary underline-offset-4 hover:underline"
-                      :href="sub.link"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {{ sub.name }}
-                    </a>
-                  </UBadge>
-                </div>
-              </div>
-            </template>
           </div>
         </div>
 

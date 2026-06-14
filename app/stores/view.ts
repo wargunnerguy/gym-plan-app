@@ -5,6 +5,7 @@ type ViewState = {
   week: number | null
   workoutId: string | null
   exerciseId: string | null
+  exerciseVariants: Record<string, number>
 }
 
 const STORAGE_KEY = 'plan-view-state'
@@ -14,7 +15,8 @@ export const useViewStore = defineStore('view', () => {
     phaseId: null,
     week: null,
     workoutId: null,
-    exerciseId: null
+    exerciseId: null,
+    exerciseVariants: {}
   }))
   const hydrated = ref(false)
 
@@ -27,7 +29,19 @@ export const useViewStore = defineStore('view', () => {
       phaseId: null,
       week: null,
       workoutId: null,
-      exerciseId: null
+      exerciseId: null,
+      exerciseVariants: {}
+    }
+  }
+
+  const cycleExerciseVariant = (exerciseId: string, totalVariants: number) => {
+    const current = viewState.value.exerciseVariants[exerciseId] ?? 0
+    viewState.value = {
+      ...viewState.value,
+      exerciseVariants: {
+        ...viewState.value.exerciseVariants,
+        [exerciseId]: (current + 1) % totalVariants,
+      }
     }
   }
 
@@ -46,7 +60,8 @@ export const useViewStore = defineStore('view', () => {
           phaseId: null,
           week: null,
           workoutId: null,
-          exerciseId: null
+          exerciseId: null,
+          exerciseVariants: {}
         }
       }
     }
@@ -66,6 +81,7 @@ export const useViewStore = defineStore('view', () => {
     viewState,
     hydrated,
     update,
-    clear
+    clear,
+    cycleExerciseVariant
   }
 })
