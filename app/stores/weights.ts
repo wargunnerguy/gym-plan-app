@@ -73,7 +73,7 @@ export const useWeightsStore = defineStore('weights', () => {
 
   const getCurrentWeight = (key: string) => weights.value[key]?.current?.weight ?? null
 
-  const getWarmupBaseWeight = (key: string) => getLastWeight(key) ?? getCurrentWeight(key)
+  const getWarmupBaseWeight = (key: string) => getCurrentWeight(key) ?? getLastWeight(key)
 
   const setFeedback = (key: string, hint: 'up' | 'down' | 'hold') => {
     if (!key) return
