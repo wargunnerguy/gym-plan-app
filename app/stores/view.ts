@@ -34,9 +34,6 @@ export const useViewStore = defineStore('view', () => {
     if ('phaseId' in patch && patch.phaseId) {
       postRow('meta', 'view_phaseId', patch.phaseId)
     }
-    if ('week' in patch && patch.week != null) {
-      postRow('meta', 'view_week', String(patch.week))
-    }
   }
 
   const clear = () => {
@@ -86,13 +83,12 @@ export const useViewStore = defineStore('view', () => {
 
     const url = config.public.userdataUrl
     if (!url) return
-    $fetch<{ exerciseVariants?: Record<string, number>, viewPhaseId?: string, viewWeek?: number }>(url).then((remote) => {
+    $fetch<{ exerciseVariants?: Record<string, number>, viewPhaseId?: string }>(url).then((remote) => {
       const patch: Partial<ViewState> = {}
       if (remote?.exerciseVariants) {
         patch.exerciseVariants = { ...viewState.value.exerciseVariants, ...remote.exerciseVariants }
       }
       if (remote?.viewPhaseId) patch.phaseId = remote.viewPhaseId
-      if (remote?.viewWeek != null) patch.week = remote.viewWeek
       if (Object.keys(patch).length) {
         viewState.value = { ...viewState.value, ...patch }
       }

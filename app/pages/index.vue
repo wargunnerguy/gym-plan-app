@@ -180,7 +180,6 @@ const applyLastCompletion = () => {
   if (!bestPhaseId || !bestWeek) return
 
   selectedPhaseId.value = bestPhaseId
-  selectedWeek.value = bestWeek
   appliedLastCompletion.value = true
 }
 

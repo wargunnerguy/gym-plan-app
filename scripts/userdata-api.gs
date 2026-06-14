@@ -54,7 +54,6 @@ function handleRead() {
   const exerciseVariants = {}
   let lastWorkoutDate = null
   let viewPhaseId = null
-  let viewWeek = null
 
   Object.values(latest).forEach(function(entry) {
     if (entry.type !== 'exercise_variant' && !entry.value) return // empty = untoggled/deleted
@@ -89,13 +88,10 @@ function handleRead() {
       if (isFinite(idx)) exerciseVariants[entry.key] = idx
     } else if (entry.type === 'view_phaseId' && entry.key === 'meta') {
       viewPhaseId = entry.value
-    } else if (entry.type === 'view_week' && entry.key === 'meta') {
-      var wk = Number(entry.value)
-      if (isFinite(wk)) viewWeek = wk
     }
   })
 
-  return json({ completions, exerciseCompletions, warmupCompletions, skipCompletions, lastWorkoutDate, weights, exerciseVariants, viewPhaseId, viewWeek })
+  return json({ completions, exerciseCompletions, warmupCompletions, skipCompletions, lastWorkoutDate, weights, exerciseVariants, viewPhaseId })
 }
 
 // ── Append one row ────────────────────────────────────────────────────────────
