@@ -11,6 +11,7 @@ type ViewState = {
 const STORAGE_KEY = 'plan-view-state'
 
 export const useViewStore = defineStore('view', () => {
+  const config = useRuntimeConfig()
   const viewState = skipHydrate(ref<ViewState>({
     phaseId: null,
     week: null,
@@ -19,6 +20,13 @@ export const useViewStore = defineStore('view', () => {
     exerciseVariants: {}
   }))
   const hydrated = ref(false)
+
+  const postRow = (key: string, type: string, value: string) => {
+    const url = config.public.userdataUrl
+    if (!url) return
+    const params = new URLSearchParams({ action: 'post', key, type, value, updatedAt: new Date().toISOString() })
+    $fetch(`${url}?${params}`).catch(() => {})
+  }
 
   const update = (patch: Partial<ViewState>) => {
     viewState.value = { ...viewState.value, ...patch }
@@ -36,13 +44,15 @@ export const useViewStore = defineStore('view', () => {
 
   const cycleExerciseVariant = (exerciseId: string, totalVariants: number) => {
     const current = viewState.value.exerciseVariants[exerciseId] ?? 0
+    const next = (current + 1) % totalVariants
     viewState.value = {
       ...viewState.value,
       exerciseVariants: {
         ...viewState.value.exerciseVariants,
-        [exerciseId]: (current + 1) % totalVariants,
+        [exerciseId]: next,
       }
     }
+    postRow(exerciseId, 'exercise_variant', String(next))
   }
 
   onMounted(() => {
@@ -66,6 +76,16 @@ export const useViewStore = defineStore('view', () => {
       }
     }
     hydrated.value = true
+
+    const url = config.public.userdataUrl
+    if (!url) return
+    $fetch<{ exerciseVariants?: Record<string, number> }>(url).then((remote) => {
+      if (!remote?.exerciseVariants) return
+      viewState.value = {
+        ...viewState.value,
+        exerciseVariants: { ...viewState.value.exerciseVariants, ...remote.exerciseVariants }
+      }
+    }).catch(() => {})
   })
 
   watch(

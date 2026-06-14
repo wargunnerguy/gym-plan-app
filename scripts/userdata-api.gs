@@ -51,10 +51,11 @@ function handleRead() {
   const warmupCompletions = {}
   const skipCompletions = {}
   const weights = {}
+  const exerciseVariants = {}
   let lastWorkoutDate = null
 
   Object.values(latest).forEach(function(entry) {
-    if (!entry.value) return // empty = untoggled/deleted
+    if (entry.type !== 'exercise_variant' && !entry.value) return // empty = untoggled/deleted
 
     if (entry.type === 'workout') {
       completions[entry.key] = { completedAt: entry.value }
@@ -81,10 +82,13 @@ function handleRead() {
     } else if (entry.type === 'weight_feedback') {
       weights[entry.key] = weights[entry.key] || {}
       weights[entry.key].feedback = { hint: entry.value, updatedAt: entry.updatedAt }
+    } else if (entry.type === 'exercise_variant') {
+      var idx = Number(entry.value)
+      if (isFinite(idx)) exerciseVariants[entry.key] = idx
     }
   })
 
-  return json({ completions, exerciseCompletions, warmupCompletions, skipCompletions, lastWorkoutDate, weights })
+  return json({ completions, exerciseCompletions, warmupCompletions, skipCompletions, lastWorkoutDate, weights, exerciseVariants })
 }
 
 // ── Append one row ────────────────────────────────────────────────────────────
